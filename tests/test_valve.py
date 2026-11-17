@@ -7,7 +7,17 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant.common import async_fire_time_changed
 
-from .conftest import VALVE, Devices, add_thermostat, call, central, set_temperature, state
+from .conftest import (
+    PASS_THROUGH,
+    SWITCH,
+    VALVE,
+    Devices,
+    add_thermostat,
+    call,
+    central,
+    set_temperature,
+    state,
+)
 
 P_ONLY = central(control={"kp": 50, "ki": 0, "kd": 0})
 
@@ -85,3 +95,78 @@ async def test_late_device_is_taken_over(hass: HomeAssistant, devices: Devices) 
     devices.trv.async_write_ha_state()
     await hass.async_block_till_done()
     assert state(hass, "climate.trv").attributes["temperature"] == 35
+
+
+VALVE_ENTITY = "valve.living_room_valve"
+
+
+async def _set_valve(hass: HomeAssistant, service: str, **data: object) -> None:
+    await hass.services.async_call(
+        "valve", service, {"entity_id": VALVE_ENTITY, **data}, blocking=True
+    )
+    await hass.async_block_till_done()
+
+
+async def test_valve_entity_shows_opening_degree(
+    hass: HomeAssistant, devices: Devices
+) -> None:
+    await add_thermostat(hass, VALVE, options=P_ONLY)
+    assert state(hass, VALVE_ENTITY).state == "open"
+    assert state(hass, VALVE_ENTITY).attributes["current_position"] == 50
+
+    await call(hass, "set_hvac_mode", hvac_mode="off")
+    assert state(hass, VALVE_ENTITY).state == "closed"
+    assert state(hass, VALVE_ENTITY).attributes["current_position"] == 0
+
+
+async def test_setting_valve_starts_manual_control(
+    hass: HomeAssistant, devices: Devices, freezer: FrozenDateTimeFactory
+) -> None:
+    handle = await add_thermostat(hass, VALVE, options=P_ONLY)
+    # 52 is within the deadband of Ember's 50, but a position set by hand is written.
+    await _set_valve(hass, "set_valve_position", position=52)
+    assert float(state(hass, "number.opening").state) == 52.0
+    assert float(state(hass, "number.closing").state) == 48.0
+    assert state(hass, VALVE_ENTITY).attributes["current_position"] == 52
+    assert handle.thermostat.manual
+    assert state(hass).attributes["manual_control"] is True
+
+    await _set_valve(hass, "set_valve_position", position=80)
+    freezer.tick(timedelta(seconds=301))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert float(state(hass, "number.opening").state) == 80.0
+
+    freezer.tick(timedelta(minutes=60))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert not handle.thermostat.manual
+    assert float(state(hass, "number.opening").state) == 50.0
+
+
+async def test_closing_valve_turns_trv_off_and_opening_turns_it_on(
+    hass: HomeAssistant, devices: Devices
+) -> None:
+    await add_thermostat(hass, VALVE, options=P_ONLY)
+    await _set_valve(hass, "close_valve")
+    assert float(state(hass, "number.opening").state) == 0.0
+    assert float(state(hass, "number.closing").state) == 100.0
+    assert state(hass, "climate.trv").state == "off"
+
+    await _set_valve(hass, "open_valve")
+    assert float(state(hass, "number.opening").state) == 100.0
+    assert float(state(hass, "number.closing").state) == 0.0
+    assert state(hass, "climate.trv").state == "heat"
+    assert state(hass, "climate.trv").attributes["temperature"] == 35
+
+
+async def test_only_valve_thermostats_have_a_valve_entity(
+    hass: HomeAssistant, devices: Devices
+) -> None:
+    await add_thermostat(hass, VALVE, title="Valve")
+    await add_thermostat(hass, SWITCH, title="Switch")
+    await add_thermostat(hass, PASS_THROUGH, title="Pass")
+    assert hass.states.async_entity_ids("valve") == ["valve.valve_valve"]
+    assert [e for e in hass.states.async_entity_ids("sensor") if e.endswith("_output")] == [
+        "sensor.switch_output"
+    ]

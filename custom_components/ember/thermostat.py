@@ -330,6 +330,14 @@ class Thermostat:
         self._clear_manual()
         await self.async_control()
 
+    async def async_set_valve_position(self, position: float) -> None:
+        """Set a valve thermostat's valve by hand, which starts manual control."""
+        assert isinstance(self.actuator, ValveActuator)
+        async with self._lock:
+            self._mark_manual()
+            await self.actuator.async_set_position(position)
+        self._notify()
+
     async def async_resume(self) -> None:
         """End manual control and take over straight away."""
         self._clear_manual()

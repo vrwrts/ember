@@ -55,6 +55,13 @@ Several devices, such as the TRVs of one room, can share a thermostat. Each gets
 
 `hvac_action` is read from the devices: heating while a switch is on, the valve is more than 5 % open, or a pass-through device reports heating.
 
+## Other entities of a thermostat
+
+- **Valve** (valve thermostats): how far the TRV's valve is open, read from its opening degree. Opening, closing or setting a position writes it to the TRV straight away and puts the thermostat under manual control, so Ember leaves it there until manual control ends. Closing also turns the TRV off.
+- **Output** (switch thermostats): the share of each cycle the switches are on, in %. It is 0 while the thermostat is off or a window is open, and unknown under manual control.
+
+Pass-through thermostats have neither, as their devices regulate themselves.
+
 ## Ember settings
 
 ### Presence
@@ -111,7 +118,7 @@ While the window sensor of a thermostat is open, the output is 0 and pass-throug
 |---|---|---|
 | Timeout | 60 min | How long Ember leaves a device alone after it's changed outside Ember. |
 
-A thermostat goes under manual control when one of its devices is changed by something other than Ember, for example turning a TRV's knob or switching a plug in its app. Ember then sends nothing to that thermostat's devices.
+A thermostat goes under manual control when one of its devices is changed by something other than Ember, for example turning a TRV's knob or switching a plug in its app, or when its Valve entity is set. Ember then sends nothing to that thermostat's devices.
 
 Reports within 30 seconds of Ember's own write don't count. Zigbee TRVs report in-between states, and the TRVZB adjusts its setpoint by itself shortly after a write.
 

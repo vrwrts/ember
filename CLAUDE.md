@@ -32,13 +32,15 @@ config entry (options: central settings)
   - Every service call goes through `Actuator._call`, which records Ember's context and the expected value. `is_manual_change` uses these, with `SETTLE_WINDOW` and the tolerances, to tell outside changes from Ember's own echoes.
 - `pid.py` is a plain PID (0 to 100 %, derivative on measurement, conditional integration). It has no Home Assistant imports.
 - `climate.py` is a thin view on a `Thermostat`. It restores the thermostat's state through `extra_restore_state_data` and starts it once added.
+- `valve.py` adds a valve entity to each valve thermostat. It shows the TRV's opening degree, and setting it starts manual control and writes the position past the deadband (`Thermostat.async_set_valve_position`).
+- `sensor.py` also adds an output sensor to each switch thermostat. Pass-through thermostats have no output, so they get neither.
 - `demand.py`, `binary_sensor.py` and `sensor.py` count thermostats with "Part of central heating" on that call for heat. They read the devices' own state, not Ember's output. Their unique IDs still use the entry ID, so entity IDs from before the subentry are kept.
 - The central heating subentry has no data of its own and no reconfigure step.
 - `const.py` holds keys, defaults and tuning constants.
 
 Behaviour to keep when changing things:
 
-- Under manual control Ember sends nothing to that thermostat's devices.
+- Under manual control Ember sends nothing to that thermostat's devices, except a position the user sets on the valve entity.
 - Unknown presence counts as home, and an unavailable window sensor counts as closed, so a dead sensor never lowers the heating.
 - Valve writes are rate-limited by `VALVE_DEADBAND`. Battery TRVs pay for every write.
 - Temperatures are handled in °C. Sensors in other units are converted.
