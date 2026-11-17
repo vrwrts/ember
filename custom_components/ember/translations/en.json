@@ -14,14 +14,15 @@
     "step": {
       "init": {
         "title": "Ember",
-        "description": "Settings shared by all thermostats.",
+        "description": "Settings shared by all thermostats. Changes on each page are kept until you choose Save.",
         "menu_options": {
           "presence": "Presence",
           "presets": "Presets",
           "control": "Control",
           "safety": "Safety",
           "window": "Windows",
-          "manual_control": "Manual control"
+          "manual_control": "Manual control",
+          "save": "Save"
         }
       },
       "presence": {

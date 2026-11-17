@@ -17,7 +17,7 @@ Requires Home Assistant 2026.11 or later.
 
 ## Setup
 
-Ember has one entry. It holds the settings all thermostats share: presence, presets, control, safety, windows and manual control. Change them with **Configure** on the Ember entry, which opens a menu with a page for each. Saving a page applies it straight away.
+Ember has one entry. It holds the settings all thermostats share: presence, presets, control, safety, windows and manual control. Change them with **Configure** on the Ember entry, which opens a menu with a page for each. Submitting a page takes you back to the menu, so you can change several pages. Choose **Save** in the menu to apply all changes. Closing the dialog without saving discards them.
 
 Add a thermostat with **Add thermostat**. Each one creates a `climate` entity, which starts in heat on the Eco preset. Change a thermostat with its **Reconfigure** option. Changing the Ember settings or any thermostat restarts all thermostats, which ends manual control.
 

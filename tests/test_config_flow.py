@@ -10,7 +10,7 @@ from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.ember.const import DEFAULT_CENTRAL, DOMAIN, PRESETS, SUBENTRY_THERMOSTAT
 
-from .conftest import SENSOR, SWITCH, VALVE, Devices, add_thermostat
+from .conftest import SENSOR, SWITCH, VALVE, Devices, add_thermostat, central
 
 
 async def test_user_flow(hass: HomeAssistant) -> None:
@@ -34,32 +34,50 @@ async def test_options_menu(hass: HomeAssistant, devices: Devices) -> None:
     result = await hass.config_entries.options.async_init(handle.entry.entry_id)
     assert result["type"] is FlowResultType.MENU
     assert result["menu_options"] == [
-        "presence", "presets", "control", "safety", "window", "manual_control"
+        "presence", "presets", "control", "safety", "window", "manual_control", "save"
     ]
 
 
-async def _open_page(hass: HomeAssistant, entry_id: str, page: str) -> dict[str, Any]:
-    result = await hass.config_entries.options.async_init(entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"next_step_id": page}
-    )
+async def _open_page(hass: HomeAssistant, flow_id: str, page: str) -> dict[str, Any]:
+    result = await hass.config_entries.options.async_configure(flow_id, {"next_step_id": page})
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == page
     return result
 
 
+async def _submit_page(hass: HomeAssistant, flow_id: str, values: dict[str, Any]) -> None:
+    result = await hass.config_entries.options.async_configure(flow_id, values)
+    # Back to the menu, not done.
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "init"
+
+
+async def _save(hass: HomeAssistant, flow_id: str) -> None:
+    result = await hass.config_entries.options.async_configure(flow_id, {"next_step_id": "save"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+
 async def test_presets_page(hass: HomeAssistant, devices: Devices) -> None:
     handle = await add_thermostat(hass, SWITCH)
     entry = handle.entry
-    result = await _open_page(hass, entry.entry_id, "presets")
+    flow_id = (await hass.config_entries.options.async_init(entry.entry_id))["flow_id"]
+    result = await _open_page(hass, flow_id, "presets")
     assert [str(k) for k in result["data_schema"].schema] == list(PRESETS)
 
     form = _preset_form(DEFAULT_CENTRAL["presets"])
     form["eco"] = {"home": 18, "away": 14}
-    result = await hass.config_entries.options.async_configure(result["flow_id"], form)
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    await hass.async_block_till_done()
+    await _submit_page(hass, flow_id, form)
+    # Nothing is written until Save.
+    assert entry.options["presets"] == DEFAULT_CENTRAL["presets"]
 
+    # Reopening the page shows the change made in this flow.
+    result = await _open_page(hass, flow_id, "presets")
+    eco = next(v for k, v in result["data_schema"].schema.items() if str(k) == "eco")
+    assert {str(k): k.default() for k in eco.schema.schema} == {"home": 18, "away": 14}
+    await _submit_page(hass, flow_id, form)
+
+    await _save(hass, flow_id)
     # Stored flat, as before, and the other pages are kept.
     assert entry.options["presets"] == {
         **DEFAULT_CENTRAL["presets"], "eco": 18, "eco_away": 14
@@ -69,22 +87,26 @@ async def test_presets_page(hass: HomeAssistant, devices: Devices) -> None:
     assert handle.thermostat.target == 18
 
 
-async def test_presence_page(hass: HomeAssistant, devices: Devices) -> None:
+async def test_several_pages_then_save(hass: HomeAssistant, devices: Devices) -> None:
     handle = await add_thermostat(hass, SWITCH)
-    result = await _open_page(hass, handle.entry.entry_id, "presence")
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {"entity": "person.anna"}
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
-    await hass.async_block_till_done()
+    flow_id = (await hass.config_entries.options.async_init(handle.entry.entry_id))["flow_id"]
+    await _open_page(hass, flow_id, "presence")
+    await _submit_page(hass, flow_id, {"entity": "person.anna"})
+    await _open_page(hass, flow_id, "manual_control")
+    await _submit_page(hass, flow_id, {"timeout": 15})
+    await _save(hass, flow_id)
     assert handle.entry.options["presence"] == {"entity": "person.anna"}
+    assert handle.entry.options["manual_control"] == {"timeout": 15}
     assert handle.entry.options["presets"] == DEFAULT_CENTRAL["presets"]
     assert handle.thermostat.presence_entity == "person.anna"
 
-    # Clearing the field removes the entity.
-    result = await _open_page(hass, handle.entry.entry_id, "presence")
-    await hass.config_entries.options.async_configure(result["flow_id"], {})
-    await hass.async_block_till_done()
+
+async def test_clearing_presence(hass: HomeAssistant, devices: Devices) -> None:
+    handle = await add_thermostat(hass, SWITCH, options=central(presence={"entity": "person.anna"}))
+    flow_id = (await hass.config_entries.options.async_init(handle.entry.entry_id))["flow_id"]
+    await _open_page(hass, flow_id, "presence")
+    await _submit_page(hass, flow_id, {})
+    await _save(hass, flow_id)
     assert handle.entry.options["presence"] == {}
 
 
