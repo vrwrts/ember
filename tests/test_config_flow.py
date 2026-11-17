@@ -8,7 +8,7 @@ from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.ember.const import DEFAULT_CENTRAL, DOMAIN, SUBENTRY_THERMOSTAT
+from custom_components.ember.const import DEFAULT_CENTRAL, DOMAIN, PRESETS, SUBENTRY_THERMOSTAT
 
 from .conftest import SENSOR, SWITCH, VALVE, Devices, add_thermostat
 
@@ -25,23 +25,67 @@ async def test_user_flow(hass: HomeAssistant) -> None:
     assert result["reason"] == "single_instance_allowed"
 
 
-async def test_options_flow(hass: HomeAssistant, devices: Devices) -> None:
+def _preset_form(presets: dict[str, float]) -> dict[str, dict[str, float]]:
+    return {p: {"home": presets[p], "away": presets[f"{p}_away"]} for p in PRESETS}
+
+
+async def test_options_menu(hass: HomeAssistant, devices: Devices) -> None:
+    handle = await add_thermostat(hass, SWITCH)
+    result = await hass.config_entries.options.async_init(handle.entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    assert result["menu_options"] == [
+        "presence", "presets", "control", "safety", "window", "manual_control"
+    ]
+
+
+async def _open_page(hass: HomeAssistant, entry_id: str, page: str) -> dict[str, Any]:
+    result = await hass.config_entries.options.async_init(entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": page}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == page
+    return result
+
+
+async def test_presets_page(hass: HomeAssistant, devices: Devices) -> None:
     handle = await add_thermostat(hass, SWITCH)
     entry = handle.entry
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["type"] is FlowResultType.FORM
-    assert {str(key) for key in result["data_schema"].schema} == {
-        "presence", "presets", "control", "safety", "window", "manual_control"
-    }
-    new = {key: dict(value) for key, value in entry.options.items()}
-    new["presence"] = {"entity": "person.anna"}
-    new["presets"]["eco"] = 21
-    result = await hass.config_entries.options.async_configure(result["flow_id"], new)
+    result = await _open_page(hass, entry.entry_id, "presets")
+    assert [str(k) for k in result["data_schema"].schema] == list(PRESETS)
+
+    form = _preset_form(DEFAULT_CENTRAL["presets"])
+    form["eco"] = {"home": 18, "away": 14}
+    result = await hass.config_entries.options.async_configure(result["flow_id"], form)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
+
+    # Stored flat, as before, and the other pages are kept.
+    assert entry.options["presets"] == {
+        **DEFAULT_CENTRAL["presets"], "eco": 18, "eco_away": 14
+    }
+    assert entry.options["control"] == DEFAULT_CENTRAL["control"]
     # Saving reloads the entry, so the thermostat runs with the new settings.
+    assert handle.thermostat.target == 18
+
+
+async def test_presence_page(hass: HomeAssistant, devices: Devices) -> None:
+    handle = await add_thermostat(hass, SWITCH)
+    result = await _open_page(hass, handle.entry.entry_id, "presence")
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"entity": "person.anna"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+    assert handle.entry.options["presence"] == {"entity": "person.anna"}
+    assert handle.entry.options["presets"] == DEFAULT_CENTRAL["presets"]
     assert handle.thermostat.presence_entity == "person.anna"
-    assert handle.thermostat.target == 21
+
+    # Clearing the field removes the entity.
+    result = await _open_page(hass, handle.entry.entry_id, "presence")
+    await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()
+    assert handle.entry.options["presence"] == {}
 
 
 async def _start(hass: HomeAssistant, devices: Devices) -> tuple[Any, dict[str, Any]]:
@@ -126,21 +170,40 @@ async def test_add_valve_thermostat_with_overrides(
     defaults = {str(k): k.default() for k in result["data_schema"].schema}
     assert defaults["central_heating"] is True
     result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {**defaults, "use_central_presets": False}
+        result["flow_id"],
+        {**defaults, "use_central_presets": False, "use_central_control": False},
     )
-    assert result["step_id"] == "overrides"
-    assert {str(k) for k in result["data_schema"].schema} == {"presets"}
-    presets = {**DEFAULT_CENTRAL["presets"], "eco": 21.5}
-    result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"presets": presets}
-    )
+    assert result["step_id"] == "presets"
+    assert [str(k) for k in result["data_schema"].schema] == list(PRESETS)
+    form = _preset_form(DEFAULT_CENTRAL["presets"])
+    form["eco"]["home"] = 21.5
+    result = await hass.config_entries.subentries.async_configure(result["flow_id"], form)
+
+    assert result["step_id"] == "control"
+    control = {**DEFAULT_CENTRAL["control"], "kp": 30}
+    result = await hass.config_entries.subentries.async_configure(result["flow_id"], control)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 
     subentry = list(handle.entry.subentries.values())[-1]
-    assert subentry.data["presets"] == presets
-    assert "control" not in subentry.data
-    assert handle.entry.runtime_data[subentry.subentry_id].target == 21.5
+    assert subentry.data["presets"] == {**DEFAULT_CENTRAL["presets"], "eco": 21.5}
+    assert subentry.data["control"] == control
+    thermostat = handle.entry.runtime_data[subentry.subentry_id]
+    assert thermostat.target == 21.5
+    assert thermostat.pid.kp == 30
+
+
+async def test_own_control_only(hass: HomeAssistant, devices: Devices) -> None:
+    _, result = await _start(hass, devices)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {"name": "Study", "temperature_sensor": SENSOR, "heaters": ["switch.plug"]},
+    )
+    defaults = {str(k): k.default() for k in result["data_schema"].schema}
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"], {**defaults, "use_central_control": False}
+    )
+    assert result["step_id"] == "control"
 
 
 async def test_reconfigure_back_to_central(hass: HomeAssistant, devices: Devices) -> None:

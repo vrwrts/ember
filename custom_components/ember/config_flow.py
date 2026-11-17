@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from typing import Any
 
@@ -102,9 +103,36 @@ def _optional_entity(key: str, values: dict[str, Any]) -> probatio.Optional:
     return probatio.Optional(key, description={"suggested_value": values.get(key)})
 
 
+# Form-only keys: presets are stored flat (comfort, comfort_away) but shown
+# as a section per preset with a home and an away field.
+FORM_HOME = "home"
+FORM_AWAY = "away"
+
+
 def _presets_schema(p: dict[str, Any]) -> probatio.Schema:
-    keys = [k for preset in PRESETS for k in (preset, f"{preset}{AWAY_SUFFIX}")]
-    return probatio.Schema({probatio.Required(k, default=p[k]): TEMPERATURE for k in keys})
+    return probatio.Schema(
+        {
+            probatio.Required(preset): section(
+                probatio.Schema(
+                    {
+                        probatio.Required(FORM_HOME, default=p[preset]): TEMPERATURE,
+                        probatio.Required(
+                            FORM_AWAY, default=p[f"{preset}{AWAY_SUFFIX}"]
+                        ): TEMPERATURE,
+                    }
+                )
+            )
+            for preset in PRESETS
+        }
+    )
+
+
+def _presets_from_form(user_input: dict[str, Any]) -> dict[str, float]:
+    presets: dict[str, float] = {}
+    for preset in PRESETS:
+        presets[preset] = user_input[preset][FORM_HOME]
+        presets[f"{preset}{AWAY_SUFFIX}"] = user_input[preset][FORM_AWAY]
+    return presets
 
 
 def _control_schema(c: dict[str, Any]) -> probatio.Schema:
@@ -122,59 +150,49 @@ def _control_schema(c: dict[str, Any]) -> probatio.Schema:
     )
 
 
-def _central_schema(options: dict[str, Any]) -> probatio.Schema:
-    s = options[SECTION_SAFETY]
-    w = options[SECTION_WINDOW]
-    m = options[SECTION_MANUAL]
+def _presence_schema(p: dict[str, Any]) -> probatio.Schema:
+    return probatio.Schema({_optional_entity(CONF_ENTITY, p): PRESENCE_SELECTOR})
+
+
+def _safety_schema(s: dict[str, Any]) -> probatio.Schema:
     return probatio.Schema(
         {
-            probatio.Required(SECTION_PRESENCE): section(
-                probatio.Schema(
-                    {_optional_entity(CONF_ENTITY, options[SECTION_PRESENCE]): PRESENCE_SELECTOR}
-                )
+            probatio.Required(CONF_SENSOR_TIMEOUT, default=s[CONF_SENSOR_TIMEOUT]): _number(
+                5, 1440, "min"
             ),
-            probatio.Required(SECTION_PRESETS): section(_presets_schema(options[SECTION_PRESETS])),
-            probatio.Required(SECTION_CONTROL): section(
-                _control_schema(options[SECTION_CONTROL]), {"collapsed": True}
-            ),
-            probatio.Required(SECTION_SAFETY): section(
-                probatio.Schema(
-                    {
-                        probatio.Required(
-                            CONF_SENSOR_TIMEOUT, default=s[CONF_SENSOR_TIMEOUT]
-                        ): _number(5, 1440, "min"),
-                        probatio.Required(
-                            CONF_FALLBACK_OUTPUT, default=s[CONF_FALLBACK_OUTPUT]
-                        ): _number(0, 100, "%"),
-                    }
-                ),
-                {"collapsed": True},
-            ),
-            probatio.Required(SECTION_WINDOW): section(
-                probatio.Schema(
-                    {
-                        probatio.Required(CONF_OPEN_DELAY, default=w[CONF_OPEN_DELAY]): _number(
-                            0, 3600, "s"
-                        ),
-                        probatio.Required(CONF_CLOSE_DELAY, default=w[CONF_CLOSE_DELAY]): _number(
-                            0, 3600, "s"
-                        ),
-                    }
-                ),
-                {"collapsed": True},
-            ),
-            probatio.Required(SECTION_MANUAL): section(
-                probatio.Schema(
-                    {
-                        probatio.Required(CONF_TIMEOUT, default=m[CONF_TIMEOUT]): _number(
-                            1, 1440, "min"
-                        )
-                    }
-                ),
-                {"collapsed": True},
+            probatio.Required(CONF_FALLBACK_OUTPUT, default=s[CONF_FALLBACK_OUTPUT]): _number(
+                0, 100, "%"
             ),
         }
     )
+
+
+def _window_schema(w: dict[str, Any]) -> probatio.Schema:
+    return probatio.Schema(
+        {
+            probatio.Required(CONF_OPEN_DELAY, default=w[CONF_OPEN_DELAY]): _number(0, 3600, "s"),
+            probatio.Required(CONF_CLOSE_DELAY, default=w[CONF_CLOSE_DELAY]): _number(
+                0, 3600, "s"
+            ),
+        }
+    )
+
+
+def _manual_schema(m: dict[str, Any]) -> probatio.Schema:
+    return probatio.Schema(
+        {probatio.Required(CONF_TIMEOUT, default=m[CONF_TIMEOUT]): _number(1, 1440, "min")}
+    )
+
+
+# The pages of the central settings, in menu order. Step ids match the options keys.
+PAGES: dict[str, Callable[[dict[str, Any]], probatio.Schema]] = {
+    SECTION_PRESENCE: _presence_schema,
+    SECTION_PRESETS: _presets_schema,
+    SECTION_CONTROL: _control_schema,
+    SECTION_SAFETY: _safety_schema,
+    SECTION_WINDOW: _window_schema,
+    SECTION_MANUAL: _manual_schema,
+}
 
 
 def _thermostat_schema(values: dict[str, Any]) -> probatio.Schema:
@@ -246,17 +264,58 @@ class EmberConfigFlow(ConfigFlow, domain=DOMAIN):
 
 
 class EmberOptionsFlow(OptionsFlow):
-    """Edit the central settings. The entry's update listener reloads it."""
+    """Edit the central settings, one page per group. The entry's update listener reloads it."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the central settings, grouped in sections."""
+        """Show the menu of settings pages."""
+        return self.async_show_menu(step_id="init", menu_options=list(PAGES))
+
+    async def _async_step_page(
+        self, page: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        options = self.config_entry.options
         if user_input is not None:
-            return self.async_create_entry(data=user_input)
-        return self.async_show_form(
-            step_id="init", data_schema=_central_schema(dict(self.config_entry.options))
-        )
+            values = _presets_from_form(user_input) if page == SECTION_PRESETS else user_input
+            return self.async_create_entry(data={**options, page: values})
+        return self.async_show_form(step_id=page, data_schema=PAGES[page](dict(options[page])))
+
+    async def async_step_presence(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Presence entity."""
+        return await self._async_step_page(SECTION_PRESENCE, user_input)
+
+    async def async_step_presets(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Home and away temperature of each preset."""
+        return await self._async_step_page(SECTION_PRESETS, user_input)
+
+    async def async_step_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """PID and cycle settings."""
+        return await self._async_step_page(SECTION_CONTROL, user_input)
+
+    async def async_step_safety(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Stale sensor timeout and fallback."""
+        return await self._async_step_page(SECTION_SAFETY, user_input)
+
+    async def async_step_window(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Window delays."""
+        return await self._async_step_page(SECTION_WINDOW, user_input)
+
+    async def async_step_manual_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manual control timeout."""
+        return await self._async_step_page(SECTION_MANUAL, user_input)
 
 
 class ThermostatSubentryFlow(ConfigSubentryFlow):
@@ -306,9 +365,7 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         """Ask whether it counts for central heating and uses the central settings."""
         if user_input is not None:
             self._data.update(user_input)
-            if user_input[CONF_USE_CENTRAL_PRESETS] and user_input[CONF_USE_CENTRAL_CONTROL]:
-                return self._finish()
-            return await self.async_step_overrides()
+            return await self._async_next(None)
         defaults = {
             # Valves and TRVs usually sit on a boiler or heat pump, switches
             # usually drive electric heaters.
@@ -320,24 +377,33 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
             step_id="settings", data_schema=_settings_schema({**defaults, **self._data})
         )
 
-    async def async_step_overrides(
+    async def _async_next(self, after: str | None) -> SubentryFlowResult:
+        # The pages for this thermostat's own settings come in order: presets, then control.
+        if after is None and not self._data[CONF_USE_CENTRAL_PRESETS]:
+            return await self.async_step_presets()
+        if after != SECTION_CONTROL and not self._data[CONF_USE_CENTRAL_CONTROL]:
+            return await self.async_step_control()
+        return self._finish()
+
+    async def async_step_presets(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Ask for this thermostat's own presets and/or control settings."""
+        """Ask for this thermostat's own preset temperatures."""
         if user_input is not None:
-            self._data.update(user_input)
-            return self._finish()
-        central = self._get_entry().options
-        fields: dict[Any, Any] = {}
-        if not self._data[CONF_USE_CENTRAL_PRESETS]:
-            fields[probatio.Required(SECTION_PRESETS)] = section(
-                _presets_schema(self._data.get(SECTION_PRESETS) or central[SECTION_PRESETS])
-            )
-        if not self._data[CONF_USE_CENTRAL_CONTROL]:
-            fields[probatio.Required(SECTION_CONTROL)] = section(
-                _control_schema(self._data.get(SECTION_CONTROL) or central[SECTION_CONTROL])
-            )
-        return self.async_show_form(step_id="overrides", data_schema=probatio.Schema(fields))
+            self._data[SECTION_PRESETS] = _presets_from_form(user_input)
+            return await self._async_next(SECTION_PRESETS)
+        presets = self._data.get(SECTION_PRESETS) or self._get_entry().options[SECTION_PRESETS]
+        return self.async_show_form(step_id="presets", data_schema=_presets_schema(presets))
+
+    async def async_step_control(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Ask for this thermostat's own PID and cycle settings."""
+        if user_input is not None:
+            self._data[SECTION_CONTROL] = user_input
+            return await self._async_next(SECTION_CONTROL)
+        control = self._data.get(SECTION_CONTROL) or self._get_entry().options[SECTION_CONTROL]
+        return self.async_show_form(step_id="control", data_schema=_control_schema(control))
 
     def _finish(self) -> SubentryFlowResult:
         data = dict(self._data)

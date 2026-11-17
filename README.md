@@ -17,7 +17,7 @@ Requires Home Assistant 2026.11 or later.
 
 ## Setup
 
-Ember has one entry. It holds the settings all thermostats share: presence, presets, control, safety, windows and manual control. Change them with **Configure** on the Ember entry.
+Ember has one entry. It holds the settings all thermostats share: presence, presets, control, safety, windows and manual control. Change them with **Configure** on the Ember entry, which opens a menu with a page for each. Saving a page applies it straight away.
 
 Add a thermostat with **Add thermostat**. Each one creates a `climate` entity, which starts in heat on the Eco preset. Change a thermostat with its **Reconfigure** option. Changing the Ember settings or any thermostat restarts all thermostats, which ends manual control.
 
@@ -140,8 +140,8 @@ It survives a restart.
 | Option | Default | |
 |---|---|---|
 | Part of central heating | on for climate entities, off for switches | Counts towards the heating demand entities. |
-| Use central presets | on | Turn off to set this thermostat's own preset temperatures. |
-| Use central control settings | on | Turn off to set this thermostat's own PID and cycle settings. |
+| Use central presets | on | Turn off to set this thermostat's own preset temperatures, on a page after this one. |
+| Use central control settings | on | Turn off to set this thermostat's own PID and cycle settings, on a page after this one. |
 
 ## Heating demand
 

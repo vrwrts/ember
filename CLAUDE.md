@@ -18,7 +18,7 @@ config entry (options: central settings)
 ```
 
 - `__init__.py` creates one `Thermostat` per subentry in `entry.runtime_data` and forwards the platforms. It also registers `ember.resume`. A change to the entry or a subentry reloads the entry. On disable, on removal of the entry and on deleting a subentry it hands the devices back first. A plain reload doesn't hand them back.
-- `config_flow.py` holds the config flow, the options flow and the subentry flow. The config flow creates the entry with `DEFAULT_CENTRAL`. The options flow edits the central settings in sections. The subentry flow has three steps: `user`/`reconfigure` (devices), `settings` (central heating and the two "use central" toggles), and `overrides` (only when a toggle is off).
+- `config_flow.py` holds the config flow, the options flow and the subentry flow. The config flow creates the entry with `DEFAULT_CENTRAL`. The options flow opens a menu with one page per group of central settings (`PAGES`), and saving a page saves the options. The subentry flow asks for devices in `user`/`reconfigure`, then for central heating and the two "use central" toggles in `settings`. The `presets` and `control` pages follow only for toggles that are off. Presets are stored flat (`comfort`, `comfort_away`) but shown as a section per preset with a home and an away field (`_presets_schema`, `_presets_from_form`).
 - `thermostat.py` holds all behaviour of one thermostat:
   - the target from preset and presence, or a temperature set by hand;
   - the control loop on a fixed interval: PID output, window pause, stale sensor fallback with a repair issue;
