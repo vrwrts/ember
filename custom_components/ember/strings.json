@@ -1,0 +1,228 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Ember",
+        "description": "Set up Ember, then add thermostats to it."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Ember is already set up. Add thermostats to it instead."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Ember",
+        "description": "Settings shared by all thermostats.",
+        "sections": {
+          "presence": {
+            "name": "Presence",
+            "data": {
+              "entity": "Presence entity"
+            },
+            "data_description": {
+              "entity": "Optional. A person, a zone, or an occupancy or presence sensor. While nobody is home, thermostats use the away temperature of their preset. Without one, Ember treats the home as always occupied."
+            }
+          },
+          "presets": {
+            "name": "Presets",
+            "data": {
+              "frost": "Frost",
+              "frost_away": "Frost, away",
+              "eco": "Eco",
+              "eco_away": "Eco, away",
+              "comfort": "Comfort",
+              "comfort_away": "Comfort, away",
+              "boost": "Boost",
+              "boost_away": "Boost, away"
+            }
+          },
+          "control": {
+            "name": "Control",
+            "data": {
+              "kp": "Proportional gain (Kp)",
+              "ki": "Integral gain (Ki)",
+              "kd": "Derivative gain (Kd)",
+              "interval": "Control interval",
+              "cycle": "Switch cycle",
+              "min_switch_time": "Minimum switch on or off time"
+            },
+            "data_description": {
+              "kp": "Output in % for each degree below the target.",
+              "interval": "How often the output is worked out again.",
+              "cycle": "Switches are on for the output's share of each cycle.",
+              "min_switch_time": "Shorter on or off periods are skipped."
+            }
+          },
+          "safety": {
+            "name": "Safety",
+            "data": {
+              "sensor_timeout": "Sensor timeout",
+              "fallback_output": "Fallback output"
+            },
+            "data_description": {
+              "sensor_timeout": "A temperature sensor that hasn't reported for this long is treated as broken. Battery sensors that only report changes need a few hours.",
+              "fallback_output": "Valve opening or switch share used while the sensor is broken."
+            }
+          },
+          "window": {
+            "name": "Windows",
+            "data": {
+              "open_delay": "Open delay",
+              "close_delay": "Close delay"
+            },
+            "data_description": {
+              "open_delay": "How long a window is open before heating stops."
+            }
+          },
+          "manual_control": {
+            "name": "Manual control",
+            "data": {
+              "timeout": "Timeout"
+            },
+            "data_description": {
+              "timeout": "How long Ember leaves a device alone after it's changed outside Ember."
+            }
+          }
+        }
+      }
+    }
+  },
+  "config_subentries": {
+    "thermostat": {
+      "entry_type": "Thermostat",
+      "initiate_flow": {
+        "user": "Add thermostat"
+      },
+      "step": {
+        "user": {
+          "title": "New thermostat",
+          "data": {
+            "name": "Name",
+            "temperature_sensor": "Temperature sensor",
+            "heaters": "Heaters",
+            "opening_degree": "Valve opening degree",
+            "closing_degree": "Valve closing degree",
+            "window_sensor": "Window sensor"
+          },
+          "data_description": {
+            "heaters": "One or more switches, or one or more climate entities such as TRVs. With valve entities, choose one climate entity.",
+            "opening_degree": "Optional. With both valve entities, Ember sets the TRV's valve directly. Without them, Ember passes the target temperature to the TRVs.",
+            "window_sensor": "Optional. Heating stops while it's open."
+          }
+        },
+        "reconfigure": {
+          "title": "Thermostat",
+          "data": {
+            "name": "Name",
+            "temperature_sensor": "Temperature sensor",
+            "heaters": "Heaters",
+            "opening_degree": "Valve opening degree",
+            "closing_degree": "Valve closing degree",
+            "window_sensor": "Window sensor"
+          },
+          "data_description": {
+            "heaters": "One or more switches, or one or more climate entities such as TRVs. With valve entities, choose one climate entity.",
+            "opening_degree": "Optional. With both valve entities, Ember sets the TRV's valve directly. Without them, Ember passes the target temperature to the TRVs.",
+            "window_sensor": "Optional. Heating stops while it's open."
+          }
+        },
+        "settings": {
+          "title": "Settings",
+          "data": {
+            "central_heating": "Part of central heating",
+            "use_central_presets": "Use central presets",
+            "use_central_control": "Use central control settings"
+          },
+          "data_description": {
+            "central_heating": "Counts towards Ember's heating demand entities, for example to run a boiler or heat pump.",
+            "use_central_presets": "Turn off to set this thermostat's own preset temperatures.",
+            "use_central_control": "Turn off to set this thermostat's own PID and cycle settings."
+          }
+        },
+        "overrides": {
+          "title": "Own settings",
+          "sections": {
+            "presets": {
+              "name": "Presets",
+              "data": {
+                "frost": "Frost",
+                "frost_away": "Frost, away",
+                "eco": "Eco",
+                "eco_away": "Eco, away",
+                "comfort": "Comfort",
+                "comfort_away": "Comfort, away",
+                "boost": "Boost",
+                "boost_away": "Boost, away"
+              }
+            },
+            "control": {
+              "name": "Control",
+              "data": {
+                "kp": "Proportional gain (Kp)",
+                "ki": "Integral gain (Ki)",
+                "kd": "Derivative gain (Kd)",
+                "interval": "Control interval",
+                "cycle": "Switch cycle",
+                "min_switch_time": "Minimum switch on or off time"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "no_heaters": "Choose at least one heater.",
+        "mixed_heaters": "Choose switches or a climate entity, not both.",
+        "valve_pair": "Choose both valve entities, or neither.",
+        "valve_needs_climate": "Valve entities need exactly one climate entity as heater."
+      },
+      "abort": {
+        "reconfigure_successful": "Thermostat updated."
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "frost": "Frost",
+              "eco": "Eco",
+              "comfort": "Comfort",
+              "boost": "Boost"
+            }
+          }
+        }
+      }
+    },
+    "binary_sensor": {
+      "heating_demand": {
+        "name": "Heating demand"
+      }
+    },
+    "sensor": {
+      "calling_for_heat": {
+        "name": "Thermostats calling for heat"
+      }
+    }
+  },
+  "services": {
+    "resume": {
+      "name": "Resume",
+      "description": "Ends manual control of Ember thermostats and takes over their devices straight away."
+    }
+  },
+  "issues": {
+    "stale_sensor": {
+      "title": "Temperature sensor of {thermostat} stopped reporting",
+      "description": "{sensor} has no usable reading. Thermostat {thermostat} runs at the fallback output until it reports again."
+    }
+  },
+  "exceptions": {
+    "resume_needs_target": {
+      "message": "Choose the Ember thermostats to resume."
+    }
+  }
+}

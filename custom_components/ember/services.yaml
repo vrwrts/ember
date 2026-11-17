@@ -1,0 +1,5 @@
+resume:
+  target:
+    entity:
+      integration: ember
+      domain: climate

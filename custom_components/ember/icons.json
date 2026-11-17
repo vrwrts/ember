@@ -1,0 +1,27 @@
+{
+  "entity": {
+    "climate": {
+      "thermostat": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "frost": "mdi:snowflake",
+              "eco": "mdi:leaf",
+              "comfort": "mdi:sofa",
+              "boost": "mdi:rocket-launch"
+            }
+          }
+        }
+      }
+    },
+    "binary_sensor": {
+      "heating_demand": { "default": "mdi:fire", "state": { "off": "mdi:fire-off" } }
+    },
+    "sensor": {
+      "calling_for_heat": { "default": "mdi:radiator" }
+    }
+  },
+  "services": {
+    "resume": { "service": "mdi:play-circle-outline" }
+  }
+}
