@@ -14,7 +14,7 @@
     "step": {
       "init": {
         "title": "Ember",
-        "description": "Settings shared by all thermostats. Changes on each page are kept until you choose Save.",
+        "description": "Settings shared by all thermostats. Changes on each page are kept until you choose Save and close.",
         "menu_options": {
           "presence": "Presence",
           "presets": "Presets",
@@ -22,7 +22,8 @@
           "safety": "Safety",
           "window": "Windows",
           "manual_control": "Manual control",
-          "save": "Save"
+          "central_heating": "Central heating",
+          "save": "Save and close"
         }
       },
       "presence": {
@@ -117,6 +118,13 @@
         "data_description": {
           "timeout": "How long Ember leaves a device alone after it's changed outside Ember."
         }
+      },
+      "central_heating": {
+        "title": "Central heating",
+        "description": "Ticked thermostats count towards the central heating demand entities, for example to run a boiler or heat pump. This sets the same option as Part of central heating on each thermostat.",
+        "data": {
+          "thermostats": "Thermostats"
+        }
       }
     }
   },
@@ -167,7 +175,7 @@
             "use_central_control": "Use central control settings"
           },
           "data_description": {
-            "central_heating": "Counts towards the demand entities of Ember's central heating, for example to run a boiler or heat pump. You can also change this for all thermostats at once from the central heating.",
+            "central_heating": "Counts towards the demand entities of Ember's central heating, for example to run a boiler or heat pump. You can also change this for all thermostats at once on the Central heating page of Ember's settings.",
             "use_central_presets": "Turn off to set this thermostat's own preset temperatures.",
             "use_central_control": "Turn off to set this thermostat's own PID and cycle settings."
           }
@@ -242,19 +250,8 @@
       "initiate_flow": {
         "user": "Add central heating"
       },
-      "step": {
-        "reconfigure": {
-          "title": "Central heating",
-          "description": "Ticked thermostats count towards the central heating demand entities, for example to run a boiler or heat pump. This sets the same option as Part of central heating on each thermostat.",
-          "data": {
-            "thermostats": "Thermostats"
-          }
-        }
-      },
       "abort": {
-        "already_configured": "Ember already has central heating.",
-        "no_thermostats": "Add a thermostat first.",
-        "reconfigure_successful": "Central heating updated."
+        "already_configured": "Ember already has central heating."
       }
     }
   },

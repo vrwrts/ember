@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 import probatio
 
@@ -27,6 +28,8 @@ from .const import (
     SUBENTRY_THERMOSTAT,
 )
 from .thermostat import Thermostat
+
+_LOGGER = logging.getLogger(__name__)
 
 type EmberConfigEntry = ConfigEntry[dict[str, Thermostat]]
 
@@ -89,6 +92,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EmberConfigEntry) -> b
                 entities.async_update_entity(entity.entity_id, device_id=None)
             devices.async_remove_device(device.id)
         hass.config_entries.async_update_entry(entry, minor_version=2)
+        _reset_subentry_types(entry)
     return True
 
 
@@ -105,7 +109,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: EmberConfigEntry) -> boo
     return True
 
 
+def _reset_subentry_types(entry: EmberConfigEntry) -> None:
+    """Make HA ask again which subentry types to offer.
+
+    HA caches ConfigEntry.supported_subentry_types until restart, but the
+    central heating type is only offered while there is none. This is the only
+    place that touches that private cache.
+    """
+    if not hasattr(entry, "_supported_subentry_types"):
+        _LOGGER.warning(
+            "Home Assistant changed how it caches subentry types; the Add central "
+            "heating button may be out of date until a restart"
+        )
+        return
+    object.__setattr__(entry, "_supported_subentry_types", None)
+
+
 async def _async_update(hass: HomeAssistant, entry: EmberConfigEntry) -> None:
+    # The reload below changes the entry's state, which sends the frontend the
+    # entry again, now with the fresh subentry types.
+    _reset_subentry_types(entry)
     removed = [t for sid, t in entry.runtime_data.items() if sid not in entry.subentries]
     await asyncio.gather(*(t.async_hand_back() for t in removed))
     hass.config_entries.async_schedule_reload(entry.entry_id)

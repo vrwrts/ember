@@ -1,6 +1,8 @@
 """The central heating subentry, its checklist and the migration that adds it."""
 
-from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
+import orjson
+
+from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr, entity_registry as er
@@ -41,11 +43,25 @@ async def test_demand_entities_belong_to_the_subentry(
     assert state(hass, DEMAND).attributes["friendly_name"] == "Central heating Demand"
 
 
-async def _checklist(hass: HomeAssistant, entry: MockConfigEntry) -> dict:
-    return await hass.config_entries.subentries.async_init(
-        (entry.entry_id, SUBENTRY_CENTRAL_HEATING),
-        context={"source": SOURCE_RECONFIGURE, "subentry_id": _central_heating_id(entry)},
+async def _checklist(hass: HomeAssistant, entry: MockConfigEntry) -> str:
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "central_heating"}
     )
+    assert result["type"] is FlowResultType.FORM
+    return result
+
+
+async def _tick_and_save(hass: HomeAssistant, result: dict, ticked: list[str]) -> None:
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"thermostats": ticked}
+    )
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
 
 
 async def test_checklist_sets_each_thermostats_toggle(
@@ -56,17 +72,10 @@ async def test_checklist_sets_each_thermostats_toggle(
     assert state(hass, COUNT).state == "1"
 
     result = await _checklist(hass, valve.entry)
-    assert result["type"] is FlowResultType.FORM
     [field] = result["data_schema"].schema
     # Ticked: the thermostats that count now.
     assert field.default() == [valve.subentry_id]
-
-    result = await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"thermostats": [switch.subentry_id]}
-    )
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "reconfigure_successful"
-    await hass.async_block_till_done()
+    await _tick_and_save(hass, result, [switch.subentry_id])
 
     subentries = valve.entry.subentries
     assert subentries[valve.subentry_id].data["central_heating"] is False
@@ -80,15 +89,23 @@ async def test_checklist_sets_each_thermostats_toggle(
 async def test_unticking_everything(hass: HomeAssistant, devices: Devices) -> None:
     valve = await add_thermostat(hass, VALVE)
     result = await _checklist(hass, valve.entry)
-    await hass.config_entries.subentries.async_configure(
-        result["flow_id"], {"thermostats": []}
-    )
-    await hass.async_block_till_done()
+    await _tick_and_save(hass, result, [])
     assert valve.entry.subentries[valve.subentry_id].data["central_heating"] is False
     assert state(hass, DEMAND).state == "off"
 
 
-async def test_checklist_without_thermostats(hass: HomeAssistant) -> None:
+async def test_checklist_is_kept_until_save(hass: HomeAssistant, devices: Devices) -> None:
+    valve = await add_thermostat(hass, VALVE)
+    result = await _checklist(hass, valve.entry)
+    await hass.config_entries.options.async_configure(result["flow_id"], {"thermostats": []})
+    assert valve.entry.subentries[valve.subentry_id].data["central_heating"] is True
+
+
+def _menu(entry: MockConfigEntry) -> list[str]:
+    return list(entry.supported_subentry_types)
+
+
+async def test_no_checklist_page_without_thermostats(hass: HomeAssistant) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ember",
@@ -105,23 +122,31 @@ async def test_checklist_without_thermostats(hass: HomeAssistant) -> None:
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
-    result = await _checklist(hass, entry)
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "no_thermostats"
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "central_heating" not in result["menu_options"]
 
 
-async def test_delete_and_add_back(hass: HomeAssistant, devices: Devices) -> None:
+async def test_add_button_only_without_central_heating(
+    hass: HomeAssistant, devices: Devices
+) -> None:
     handle = await add_thermostat(hass, VALVE)
     entry = handle.entry
-    result = await hass.config_entries.subentries.async_init(
-        (entry.entry_id, SUBENTRY_CENTRAL_HEATING), context={"source": SOURCE_USER}
-    )
-    assert result["type"] is FlowResultType.ABORT
-    assert result["reason"] == "already_configured"
+    assert _menu(entry) == ["thermostat"]
 
     hass.config_entries.async_remove_subentry(entry, _central_heating_id(entry))
     await hass.async_block_till_done()
     assert hass.states.get(DEMAND) is None
+    assert _menu(entry) == ["thermostat", "central_heating"]
+    # The frontend gets the entry again with the new types.
+    assert b"central_heating" in orjson.dumps(entry.as_json_fragment)
+    # With no central heating, the settings have no checklist page.
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "central_heating" not in result["menu_options"]
+    await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "save"}
+    )
+    await hass.async_block_till_done()
+
     # Deleting it stays deleted across a reload.
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
@@ -133,6 +158,7 @@ async def test_delete_and_add_back(hass: HomeAssistant, devices: Devices) -> Non
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
     assert state(hass, DEMAND).state == "on"
+    assert _menu(entry) == ["thermostat"]
 
 
 async def test_migration_keeps_entity_ids(hass: HomeAssistant, devices: Devices) -> None:

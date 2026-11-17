@@ -17,7 +17,7 @@ Requires Home Assistant 2026.11 or later.
 
 ## Setup
 
-Ember has one entry. It holds the settings all thermostats share: presence, presets, control, safety, windows and manual control. Change them with **Configure** on the Ember entry, which opens a menu with a page for each. Submitting a page takes you back to the menu, so you can change several pages. Choose **Save** in the menu to apply all changes. Closing the dialog without saving discards them.
+Ember has one entry. It holds the settings all thermostats share: presence, presets, control, safety, windows and manual control. Change them with **Configure** on the Ember entry, which opens a menu with a page for each. Submitting a page takes you back to the menu, so you can change several pages. Choose **Save and close** in the menu to apply all changes. Closing the dialog without saving discards them.
 
 Add a thermostat with **Add thermostat**. Each one creates a `climate` entity, which starts in heat on the Eco preset. Change a thermostat with its **Reconfigure** option. Changing the Ember settings or any thermostat restarts all thermostats, which ends manual control.
 
@@ -150,9 +150,9 @@ Ember is set up with a **Central heating** entry next to your thermostats. Its d
 - **Demand** (`binary_sensor`): on while any thermostat that's part of central heating calls for heat.
 - **Thermostats calling for heat** (`sensor`): how many do.
 
-Only thermostats with **Part of central heating** on count. It's on by default for TRVs, which usually sit on a water system, and off for switches, which usually drive electric heaters. Set it per thermostat, or for all of them at once with **Reconfigure** on the central heating, which lists the thermostats with a checkbox each.
+Only thermostats with **Part of central heating** on count. It's on by default for TRVs, which usually sit on a water system, and off for switches, which usually drive electric heaters. Set it per thermostat, or for all of them at once on the **Central heating** page of Ember's settings, which lists the thermostats with a checkbox each.
 
-If you don't need the demand entities, delete the central heating. Add it back with **Add central heating**.
+If you don't need the demand entities, delete the central heating. Ember then offers **Add central heating** to add it back. There can only be one, so the button is hidden while it exists.
 
 Installs from before the central heating entry existed keep their entity IDs (`binary_sensor.ember_heating_demand`, `sensor.ember_thermostats_calling_for_heat`). The entities move from the "Ember" device to the new "Central heating" device.
 

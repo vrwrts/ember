@@ -12,6 +12,7 @@ from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
+    ConfigSubentry,
     ConfigSubentryFlow,
     OptionsFlow,
     SubentryFlowResult,
@@ -273,11 +274,15 @@ class EmberConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        """Thermostats and the central heating are subentries."""
-        return {
-            SUBENTRY_THERMOSTAT: ThermostatSubentryFlow,
-            SUBENTRY_CENTRAL_HEATING: CentralHeatingSubentryFlow,
-        }
+        """Thermostats, and the central heating while there is none.
+
+        There can only be one central heating, so its Add button is offered only
+        after it was deleted. HA caches this; `__init__.py` resets the cache.
+        """
+        types: dict[str, type[ConfigSubentryFlow]] = {SUBENTRY_THERMOSTAT: ThermostatSubentryFlow}
+        if not config_entry.get_subentries_of_type(SUBENTRY_CENTRAL_HEATING):
+            types[SUBENTRY_CENTRAL_HEATING] = CentralHeatingSubentryFlow
+        return types
 
 
 class EmberOptionsFlow(OptionsFlow):
@@ -287,6 +292,8 @@ class EmberOptionsFlow(OptionsFlow):
         """Initialise."""
         # Changes from every page, written together by the save step.
         self._options: dict[str, Any] | None = None
+        # Thermostat subentry id to whether it counts for central heating.
+        self._central_heating: dict[str, bool] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -294,14 +301,59 @@ class EmberOptionsFlow(OptionsFlow):
         """Show the menu of settings pages, and save."""
         if self._options is None:
             self._options = deepcopy(dict(self.config_entry.options))
-        return self.async_show_menu(step_id="init", menu_options=[*PAGES, "save"])
+            self._central_heating = {
+                s.subentry_id: s.data[CONF_CENTRAL_HEATING] for s in self._thermostats()
+            }
+        pages = list(PAGES)
+        if self._thermostats() and self.config_entry.get_subentries_of_type(
+            SUBENTRY_CENTRAL_HEATING
+        ):
+            pages.append(SUBENTRY_CENTRAL_HEATING)
+        return self.async_show_menu(step_id="init", menu_options=[*pages, "save"])
+
+    def _thermostats(self) -> list[ConfigSubentry]:
+        return self.config_entry.get_subentries_of_type(SUBENTRY_THERMOSTAT)
 
     async def async_step_save(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Write the changes from all pages."""
         assert self._options is not None
+        for subentry in self._thermostats():
+            counts = self._central_heating.get(subentry.subentry_id)
+            if counts is not None and subentry.data[CONF_CENTRAL_HEATING] != counts:
+                self.hass.config_entries.async_update_subentry(
+                    self.config_entry,
+                    subentry,
+                    data={**subentry.data, CONF_CENTRAL_HEATING: counts},
+                )
         return self.async_create_entry(data=self._options)
+
+    async def async_step_central_heating(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Tick the thermostats that count; this sets their own toggle."""
+        thermostats = self._thermostats()
+        if user_input is not None:
+            chosen = set(user_input.get(CONF_THERMOSTATS, []))
+            self._central_heating = {s.subentry_id: s.subentry_id in chosen for s in thermostats}
+            return await self.async_step_init()
+        selector = SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(value=s.subentry_id, label=s.title) for s in thermostats
+                ],
+                multiple=True,
+                mode=SelectSelectorMode.LIST,
+            )
+        )
+        counted = [sid for sid, counts in self._central_heating.items() if counts]
+        return self.async_show_form(
+            step_id=SUBENTRY_CENTRAL_HEATING,
+            data_schema=probatio.Schema(
+                {probatio.Optional(CONF_THERMOSTATS, default=counted): selector}
+            ),
+        )
 
     async def _async_step_page(
         self, page: str, user_input: dict[str, Any] | None
@@ -454,50 +506,16 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
 
 
 class CentralHeatingSubentryFlow(ConfigSubentryFlow):
-    """Re-add the central heating, or choose which thermostats count towards it."""
+    """Add the central heating back after it was deleted."""
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> SubentryFlowResult:
-        """Add it back after it was deleted; there is only one."""
+        """Create it; there is only one, so a second is refused."""
         if self._get_entry().get_subentries_of_type(SUBENTRY_CENTRAL_HEATING):
             return self.async_abort(reason="already_configured")
         return self.async_create_entry(
             title=CENTRAL_HEATING_SUBENTRY["title"],
             data={},
             unique_id=CENTRAL_HEATING_SUBENTRY["unique_id"],
-        )
-
-    async def async_step_reconfigure(
-        self, user_input: dict[str, Any] | None = None
-    ) -> SubentryFlowResult:
-        """Tick the thermostats that count; this sets their own toggle."""
-        entry = self._get_entry()
-        thermostats = entry.get_subentries_of_type(SUBENTRY_THERMOSTAT)
-        if user_input is not None:
-            chosen = set(user_input.get(CONF_THERMOSTATS, []))
-            for subentry in thermostats:
-                counts = subentry.subentry_id in chosen
-                if subentry.data[CONF_CENTRAL_HEATING] != counts:
-                    self.hass.config_entries.async_update_subentry(
-                        entry, subentry, data={**subentry.data, CONF_CENTRAL_HEATING: counts}
-                    )
-            return self.async_abort(reason="reconfigure_successful")
-        if not thermostats:
-            return self.async_abort(reason="no_thermostats")
-        selector = SelectSelector(
-            SelectSelectorConfig(
-                options=[
-                    SelectOptionDict(value=s.subentry_id, label=s.title) for s in thermostats
-                ],
-                multiple=True,
-                mode=SelectSelectorMode.LIST,
-            )
-        )
-        counted = [s.subentry_id for s in thermostats if s.data[CONF_CENTRAL_HEATING]]
-        return self.async_show_form(
-            step_id="reconfigure",
-            data_schema=probatio.Schema(
-                {probatio.Optional(CONF_THERMOSTATS, default=counted): selector}
-            ),
         )
