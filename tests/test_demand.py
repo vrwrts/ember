@@ -4,8 +4,8 @@ from homeassistant.core import HomeAssistant
 
 from .conftest import PASS_THROUGH, SWITCH, VALVE, Devices, add_thermostat, call, state
 
-DEMAND = "binary_sensor.ember_heating_demand"
-COUNT = "sensor.ember_thermostats_calling_for_heat"
+DEMAND = "binary_sensor.central_heating_demand"
+COUNT = "sensor.central_heating_thermostats_calling_for_heat"
 
 
 async def test_switch_is_not_counted_by_default(hass: HomeAssistant, devices: Devices) -> None:

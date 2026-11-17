@@ -6,16 +6,26 @@ import asyncio
 
 import probatio
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv, entity_registry as er
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    entity_registry as er,
+)
 from homeassistant.helpers.target import TargetSelection, async_extract_referenced_entity_ids
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.util.hass_dict import HassKey
 
-from .const import DOMAIN, SERVICE_RESUME, SUBENTRY_THERMOSTAT
+from .const import (
+    CENTRAL_HEATING_SUBENTRY,
+    DOMAIN,
+    SERVICE_RESUME,
+    SUBENTRY_CENTRAL_HEATING,
+    SUBENTRY_THERMOSTAT,
+)
 from .thermostat import Thermostat
 
 type EmberConfigEntry = ConfigEntry[dict[str, Thermostat]]
@@ -57,6 +67,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(
         DOMAIN, SERVICE_RESUME, resume, probatio.Schema(cv.ENTITY_SERVICE_FIELDS)
     )
+    return True
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: EmberConfigEntry) -> bool:
+    """Add the central heating subentry to entries from before it existed."""
+    if entry.version > 1:
+        return False
+    if entry.minor_version < 2:
+        if not entry.get_subentries_of_type(SUBENTRY_CENTRAL_HEATING):
+            hass.config_entries.async_add_subentry(
+                entry, ConfigSubentry(**CENTRAL_HEATING_SUBENTRY)
+            )
+        # The demand entities lived on a device of the entry itself. Detach them
+        # before removing it, so they keep their entity ids and move to the
+        # subentry's device on setup.
+        devices = dr.async_get(hass)
+        if device := devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)}):
+            entities = er.async_get(hass)
+            for entity in er.async_entries_for_device(entities, device.id, True):
+                entities.async_update_entity(entity.entity_id, device_id=None)
+            devices.async_remove_device(device.id)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
     return True
 
 

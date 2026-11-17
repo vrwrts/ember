@@ -139,18 +139,22 @@ It survives a restart.
 
 | Option | Default | |
 |---|---|---|
-| Part of central heating | on for climate entities, off for switches | Counts towards the heating demand entities. |
+| Part of central heating | on for climate entities, off for switches | Counts towards the [heating demand](#heating-demand) entities. |
 | Use central presets | on | Turn off to set this thermostat's own preset temperatures, on a page after this one. |
 | Use central control settings | on | Turn off to set this thermostat's own PID and cycle settings, on a page after this one. |
 
 ## Heating demand
 
-The Ember device has two entities, for running a boiler or heat pump:
+Ember is set up with a **Central heating** entry next to your thermostats. Its device has two entities, for running a boiler or heat pump:
 
-- **Heating demand** (`binary_sensor`): on while any thermostat that's part of central heating calls for heat.
+- **Demand** (`binary_sensor`): on while any thermostat that's part of central heating calls for heat.
 - **Thermostats calling for heat** (`sensor`): how many do.
 
-Only thermostats with **Part of central heating** on count. It's on by default for TRVs, which usually sit on a water system, and off for switches, which usually drive electric heaters.
+Only thermostats with **Part of central heating** on count. It's on by default for TRVs, which usually sit on a water system, and off for switches, which usually drive electric heaters. Set it per thermostat, or for all of them at once with **Reconfigure** on the central heating, which lists the thermostats with a checkbox each.
+
+If you don't need the demand entities, delete the central heating. Add it back with **Add central heating**.
+
+Installs from before the central heating entry existed keep their entity IDs (`binary_sensor.ember_heating_demand`, `sensor.ember_thermostats_calling_for_heat`). The entities move from the "Ember" device to the new "Central heating" device.
 
 ## Handing control back
 

@@ -6,7 +6,7 @@ The aim is a small integration with few options. Prefer leaving a feature out ov
 
 ## Architecture
 
-There is one config entry (`single_config_entry`) with the central settings in its options: presence, presets, control, safety, windows and manual control. Each thermostat is a subentry. Its data holds its devices and toggles, plus its own `presets` or `control` section when it doesn't use the central ones.
+There is one config entry (`single_config_entry`) with the central settings in its options: presence, presets, control, safety, windows and manual control. Each thermostat is a subentry. Its data holds its devices and toggles, plus its own `presets` or `control` section when it doesn't use the central ones. One `central_heating` subentry holds the demand entities. The config flow creates it, `async_migrate_entry` adds it to entries from before minor version 2, and a user who deletes it can add it back.
 
 ```
 config entry (options: central settings)
@@ -14,7 +14,7 @@ config entry (options: central settings)
 │                              ▲
 │                              └── EmberClimate (climate entity, restores state)
 ├── …
-└── HeatingDemand, CallingForHeat (central device, read every Thermostat)
+└── central heating subentry ─▶ HeatingDemand, CallingForHeat (read every Thermostat)
 ```
 
 - `__init__.py` creates one `Thermostat` per subentry in `entry.runtime_data` and forwards the platforms. It also registers `ember.resume`. A change to the entry or a subentry reloads the entry. On disable, on removal of the entry and on deleting a subentry it hands the devices back first. A plain reload doesn't hand them back.
@@ -32,7 +32,8 @@ config entry (options: central settings)
   - Every service call goes through `Actuator._call`, which records Ember's context and the expected value. `is_manual_change` uses these, with `SETTLE_WINDOW` and the tolerances, to tell outside changes from Ember's own echoes.
 - `pid.py` is a plain PID (0 to 100 %, derivative on measurement, conditional integration). It has no Home Assistant imports.
 - `climate.py` is a thin view on a `Thermostat`. It restores the thermostat's state through `extra_restore_state_data` and starts it once added.
-- `demand.py`, `binary_sensor.py` and `sensor.py` count thermostats with "Part of central heating" on that call for heat. They read the devices' own state, not Ember's output.
+- `demand.py`, `binary_sensor.py` and `sensor.py` count thermostats with "Part of central heating" on that call for heat. They read the devices' own state, not Ember's output. Their unique IDs still use the entry ID, so entity IDs from before the subentry are kept.
+- The central heating subentry has no data of its own. Its reconfigure step is a checkbox list that writes each thermostat's `central_heating` toggle, so that toggle stays the single source.
 - `const.py` holds keys, defaults and tuning constants.
 
 Behaviour to keep when changing things:

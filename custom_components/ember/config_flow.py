@@ -26,11 +26,16 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
 )
 
 from .const import (
     AWAY_SUFFIX,
+    CENTRAL_HEATING_SUBENTRY,
     CONF_CENTRAL_HEATING,
     CONF_CLOSE_DELAY,
     CONF_CLOSING,
@@ -47,6 +52,7 @@ from .const import (
     CONF_OPENING,
     CONF_SENSOR,
     CONF_SENSOR_TIMEOUT,
+    CONF_THERMOSTATS,
     CONF_TIMEOUT,
     CONF_USE_CENTRAL_CONTROL,
     CONF_USE_CENTRAL_PRESETS,
@@ -62,6 +68,7 @@ from .const import (
     SECTION_PRESETS,
     SECTION_SAFETY,
     SECTION_WINDOW,
+    SUBENTRY_CENTRAL_HEATING,
     SUBENTRY_THERMOSTAT,
     TEMP_STEP,
 )
@@ -241,12 +248,19 @@ class EmberConfigFlow(ConfigFlow, domain=DOMAIN):
     """Create the Ember entry that holds the central settings."""
 
     VERSION = 1
+    # 2 added the central heating subentry.
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Create the entry with defaults; thermostats are added to it afterwards."""
-        return self.async_create_entry(title="Ember", data={}, options=deepcopy(DEFAULT_CENTRAL))
+        return self.async_create_entry(
+            title="Ember",
+            data={},
+            options=deepcopy(DEFAULT_CENTRAL),
+            subentries=[deepcopy(CENTRAL_HEATING_SUBENTRY)],
+        )
 
     @staticmethod
     @callback
@@ -259,8 +273,11 @@ class EmberConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        """Thermostats are subentries."""
-        return {SUBENTRY_THERMOSTAT: ThermostatSubentryFlow}
+        """Thermostats and the central heating are subentries."""
+        return {
+            SUBENTRY_THERMOSTAT: ThermostatSubentryFlow,
+            SUBENTRY_CENTRAL_HEATING: CentralHeatingSubentryFlow,
+        }
 
 
 class EmberOptionsFlow(OptionsFlow):
@@ -433,4 +450,54 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
             return self.async_create_entry(title=self._title, data=data)
         return self.async_update_and_abort(
             self._get_entry(), self._get_reconfigure_subentry(), title=self._title, data=data
+        )
+
+
+class CentralHeatingSubentryFlow(ConfigSubentryFlow):
+    """Re-add the central heating, or choose which thermostats count towards it."""
+
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Add it back after it was deleted; there is only one."""
+        if self._get_entry().get_subentries_of_type(SUBENTRY_CENTRAL_HEATING):
+            return self.async_abort(reason="already_configured")
+        return self.async_create_entry(
+            title=CENTRAL_HEATING_SUBENTRY["title"],
+            data={},
+            unique_id=CENTRAL_HEATING_SUBENTRY["unique_id"],
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> SubentryFlowResult:
+        """Tick the thermostats that count; this sets their own toggle."""
+        entry = self._get_entry()
+        thermostats = entry.get_subentries_of_type(SUBENTRY_THERMOSTAT)
+        if user_input is not None:
+            chosen = set(user_input.get(CONF_THERMOSTATS, []))
+            for subentry in thermostats:
+                counts = subentry.subentry_id in chosen
+                if subentry.data[CONF_CENTRAL_HEATING] != counts:
+                    self.hass.config_entries.async_update_subentry(
+                        entry, subentry, data={**subentry.data, CONF_CENTRAL_HEATING: counts}
+                    )
+            return self.async_abort(reason="reconfigure_successful")
+        if not thermostats:
+            return self.async_abort(reason="no_thermostats")
+        selector = SelectSelector(
+            SelectSelectorConfig(
+                options=[
+                    SelectOptionDict(value=s.subentry_id, label=s.title) for s in thermostats
+                ],
+                multiple=True,
+                mode=SelectSelectorMode.LIST,
+            )
+        )
+        counted = [s.subentry_id for s in thermostats if s.data[CONF_CENTRAL_HEATING]]
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=probatio.Schema(
+                {probatio.Optional(CONF_THERMOSTATS, default=counted): selector}
+            ),
         )
