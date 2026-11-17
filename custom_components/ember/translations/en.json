@@ -138,6 +138,7 @@
         "user": {
           "title": "New thermostat",
           "data": {
+            "area": "Area",
             "name": "Name",
             "temperature_sensor": "Temperature sensor",
             "heaters": "Heaters",
@@ -146,6 +147,8 @@
             "window_sensor": "Window sensor"
           },
           "data_description": {
+            "area": "Optional. The device is placed in this area.",
+            "name": "The name of the device, for example Radiator. The thermostat is listed as the area followed by this name.",
             "heaters": "One or more switches, or one or more climate entities such as TRVs. With valve entities, choose one climate entity.",
             "opening_degree": "Optional. With both valve entities, Ember sets the TRV's valve directly. Without them, Ember passes the target temperature to the TRVs.",
             "window_sensor": "Optional. Heating stops while it's open."
@@ -154,6 +157,7 @@
         "reconfigure": {
           "title": "Thermostat",
           "data": {
+            "area": "Area",
             "name": "Name",
             "temperature_sensor": "Temperature sensor",
             "heaters": "Heaters",
@@ -162,6 +166,8 @@
             "window_sensor": "Window sensor"
           },
           "data_description": {
+            "area": "Optional. The device is placed in this area.",
+            "name": "The name of the device, for example Radiator. The thermostat is listed as the area followed by this name.",
             "heaters": "One or more switches, or one or more climate entities such as TRVs. With valve entities, choose one climate entity.",
             "opening_degree": "Optional. With both valve entities, Ember sets the TRV's valve directly. Without them, Ember passes the target temperature to the TRVs.",
             "window_sensor": "Optional. Heating stops while it's open."

@@ -129,7 +129,8 @@ It survives a restart.
 
 | Option | |
 |---|---|
-| Name | The name of the climate entity. |
+| Area | Optional. The area the device is placed in. |
+| Name | The name of the device and its climate entity, for example "Radiator". The thermostat is listed under the area followed by the name, for example "Living Room Radiator". |
 | Temperature sensor | The room temperature. |
 | Heaters | One or more switches, or one or more climate entities. |
 | Valve opening degree, valve closing degree | Optional. Both or neither, and only with a single climate entity. |

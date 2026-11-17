@@ -7,10 +7,11 @@ import pytest
 from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.helpers import area_registry as ar, device_registry as dr
 
 from custom_components.ember.const import DEFAULT_CENTRAL, DOMAIN, PRESETS, SUBENTRY_THERMOSTAT
 
-from .conftest import SENSOR, SWITCH, VALVE, Devices, add_thermostat, central
+from .conftest import SENSOR, SWITCH, VALVE, Devices, Handle, add_thermostat, central
 
 
 async def test_user_flow(hass: HomeAssistant) -> None:
@@ -180,6 +181,7 @@ async def test_add_switch_thermostat(hass: HomeAssistant, devices: Devices) -> N
     subentry = list(handle.entry.subentries.values())[-1]
     assert subentry.title == "Study"
     assert subentry.data == {
+        "name": "Study",
         "temperature_sensor": SENSOR,
         "heaters": ["switch.plug"],
         "central_heating": False,
@@ -263,3 +265,72 @@ async def test_reconfigure_back_to_central(hass: HomeAssistant, devices: Devices
     # Clearing the window sensor field removes it.
     assert "window_sensor" not in subentry.data
     assert handle.thermostat.pid.kp == DEFAULT_CENTRAL["control"]["kp"]
+
+
+def _device(hass: HomeAssistant, handle: Handle) -> dr.DeviceEntry:
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, handle.subentry_id), handle.entry.entry_id
+    )
+    assert device is not None
+    return device
+
+
+async def test_add_with_area(hass: HomeAssistant, devices: Devices) -> None:
+    living = ar.async_get(hass).async_create("Living Room")
+    handle, result = await _start(hass, devices)
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {
+            "area": living.id,
+            "name": "Radiator",
+            "temperature_sensor": SENSOR,
+            "heaters": ["switch.plug"],
+        },
+    )
+    defaults = {str(k): k.default() for k in result["data_schema"].schema}
+    result = await hass.config_entries.subentries.async_configure(result["flow_id"], defaults)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    subentry = list(handle.entry.subentries.values())[-1]
+    # The entry tells rooms apart, the device leaves that to its area.
+    assert subentry.title == "Living Room Radiator"
+    device = _device(hass, Handle(handle.entry, subentry.subentry_id))
+    assert device.name == "Radiator"
+    assert device.area_id == living.id
+
+
+async def test_reconfigure_moves_device(hass: HomeAssistant, devices: Devices) -> None:
+    areas = ar.async_get(hass)
+    study = areas.async_create("Study")
+    handle = await add_thermostat(hass, SWITCH, title="Living room radiator")
+    device = _device(hass, handle)
+    # Thermostats from before the area field are named after their title.
+    assert device.name == "Living room radiator"
+    lounge = areas.async_create("Lounge")
+    dr.async_get(hass).async_update_device(device.id, area_id=lounge.id)
+
+    result = await hass.config_entries.subentries.async_init(
+        (handle.entry.entry_id, SUBENTRY_THERMOSTAT),
+        context={"source": SOURCE_RECONFIGURE, "subentry_id": handle.subentry_id},
+    )
+    suggested = {
+        str(k): (k.description or {}).get("suggested_value") for k in result["data_schema"].schema
+    }
+    assert suggested["name"] == "Living room radiator"
+    # The area the device is in now, even though it was set outside Ember.
+    assert suggested["area"] == lounge.id
+
+    result = await hass.config_entries.subentries.async_configure(
+        result["flow_id"],
+        {"area": study.id, "name": "Radiator", "temperature_sensor": SENSOR, **SWITCH},
+    )
+    defaults = {str(k): k.default() for k in result["data_schema"].schema}
+    result = await hass.config_entries.subentries.async_configure(result["flow_id"], defaults)
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+
+    assert handle.entry.subentries[handle.subentry_id].title == "Study Radiator"
+    device = _device(hass, handle)
+    assert device.name == "Radiator"
+    assert device.area_id == study.id

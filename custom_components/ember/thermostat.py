@@ -13,6 +13,7 @@ from homeassistant.components.climate import HVACMode
 from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import (
     ATTR_UNIT_OF_MEASUREMENT,
+    CONF_NAME,
     EVENT_HOMEASSISTANT_STOP,
     STATE_HOME,
     STATE_ON,
@@ -40,6 +41,7 @@ from homeassistant.util.unit_conversion import TemperatureConverter
 from .actuator import Actuator, PassThroughActuator, SwitchActuator, ValveActuator
 from .const import (
     AWAY_SUFFIX,
+    CONF_AREA,
     CONF_CENTRAL_HEATING,
     CONF_CLOSE_DELAY,
     CONF_CLOSING,
@@ -90,6 +92,9 @@ class Thermostat:
         self.subentry_id = subentry.subentry_id
         self.title = subentry.title
         data = subentry.data
+        # Thermostats from before the area field have only a title.
+        self.name: str = data.get(CONF_NAME, subentry.title)
+        self.area: str | None = data.get(CONF_AREA)
         central = entry.options
         self.presets: dict[str, float] = (
             central[SECTION_PRESETS] if data[CONF_USE_CENTRAL_PRESETS] else data[SECTION_PRESETS]
