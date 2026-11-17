@@ -266,20 +266,38 @@ class EmberConfigFlow(ConfigFlow, domain=DOMAIN):
 class EmberOptionsFlow(OptionsFlow):
     """Edit the central settings, one page per group. The entry's update listener reloads it."""
 
+    def __init__(self) -> None:
+        """Initialise."""
+        # Changes from every page, written together by the save step.
+        self._options: dict[str, Any] | None = None
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Show the menu of settings pages."""
-        return self.async_show_menu(step_id="init", menu_options=list(PAGES))
+        """Show the menu of settings pages, and save."""
+        if self._options is None:
+            self._options = deepcopy(dict(self.config_entry.options))
+        return self.async_show_menu(step_id="init", menu_options=[*PAGES, "save"])
+
+    async def async_step_save(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Write the changes from all pages."""
+        assert self._options is not None
+        return self.async_create_entry(data=self._options)
 
     async def _async_step_page(
         self, page: str, user_input: dict[str, Any] | None
     ) -> ConfigFlowResult:
-        options = self.config_entry.options
+        assert self._options is not None
         if user_input is not None:
             values = _presets_from_form(user_input) if page == SECTION_PRESETS else user_input
-            return self.async_create_entry(data={**options, page: values})
-        return self.async_show_form(step_id=page, data_schema=PAGES[page](dict(options[page])))
+            self._options[page] = values
+            # Back to the menu, so more pages can be changed before saving.
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id=page, data_schema=PAGES[page](dict(self._options[page]))
+        )
 
     async def async_step_presence(
         self, user_input: dict[str, Any] | None = None
