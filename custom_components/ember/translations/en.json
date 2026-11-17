@@ -250,6 +250,12 @@
       "initiate_flow": {
         "user": "Add central heating"
       },
+      "step": {
+        "user": {
+          "title": "Central heating",
+          "description": "Adds the central heating demand entities."
+        }
+      },
       "abort": {
         "already_configured": "Ember already has central heating."
       }
