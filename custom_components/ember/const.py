@@ -5,6 +5,18 @@ from typing import Final
 DOMAIN: Final = "ember"
 
 SUBENTRY_THERMOSTAT: Final = "thermostat"
+SUBENTRY_CENTRAL_HEATING: Final = "central_heating"
+
+# Holds the heating demand entities. Created with the entry, and by migration
+# for entries from before it existed.
+CENTRAL_HEATING_SUBENTRY: Final = {
+    "data": {},
+    "subentry_type": SUBENTRY_CENTRAL_HEATING,
+    "title": "Central heating",
+    "unique_id": SUBENTRY_CENTRAL_HEATING,
+}
+
+CONF_THERMOSTATS: Final = "thermostats"
 
 PRESET_FROST: Final = "frost"
 PRESET_ECO: Final = "eco"

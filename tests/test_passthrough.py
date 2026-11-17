@@ -43,12 +43,12 @@ async def test_several_devices_in_one_thermostat(hass: HomeAssistant, devices: D
     # Each device gets the target, clamped to its own range.
     assert state(hass, "climate.trv").attributes["temperature"] == 17
     assert state(hass, "climate.trv2").attributes["temperature"] == 18
-    assert state(hass, "binary_sensor.ember_heating_demand").state == "off"
+    assert state(hass, "binary_sensor.central_heating_demand").state == "off"
 
     devices.trv2.external(hvac_action="heating")
     await hass.async_block_till_done()
     assert state(hass).attributes["hvac_action"] == "heating"
-    assert state(hass, "binary_sensor.ember_heating_demand").state == "on"
+    assert state(hass, "binary_sensor.central_heating_demand").state == "on"
 
     await call(hass, "set_hvac_mode", hvac_mode="off")
     assert state(hass, "climate.trv").state == "off"

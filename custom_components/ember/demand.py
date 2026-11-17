@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
@@ -16,12 +17,15 @@ class DemandEntity(Entity):
     _attr_has_entity_name = True
     _attr_should_poll = False
 
-    def __init__(self, entry: EmberConfigEntry, key: str) -> None:
+    def __init__(self, entry: EmberConfigEntry, subentry: ConfigSubentry, key: str) -> None:
         """Initialise."""
         self.entry = entry
         self._attr_translation_key = key
+        # Kept from before the central heating subentry, so entity ids and history stay.
         self._attr_unique_id = f"{entry.entry_id}_{key}"
-        self._attr_device_info = DeviceInfo(identifiers={(DOMAIN, entry.entry_id)}, name="Ember")
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, subentry.subentry_id)}, name=subentry.title
+        )
 
     @property
     def calling(self) -> int:

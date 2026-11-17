@@ -24,6 +24,7 @@ from homeassistant.setup import async_setup_component
 from pytest_homeassistant.common import MockConfigEntry, setup_test_component_platform
 
 from custom_components.ember.const import (
+    CENTRAL_HEATING_SUBENTRY,
     CONF_CENTRAL_HEATING,
     CONF_HEATERS,
     CONF_SENSOR,
@@ -239,8 +240,10 @@ async def add_thermostat(
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="Ember",
+            minor_version=2,
             options=options or central(),
             subentries_data=[
+                CENTRAL_HEATING_SUBENTRY,
                 {
                     "data": subentry_data,
                     "subentry_type": SUBENTRY_THERMOSTAT,
@@ -252,7 +255,7 @@ async def add_thermostat(
         entry.add_to_hass(hass)
         assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    return Handle(entry, list(entry.subentries)[-1])
+    return Handle(entry, entry.get_subentries_of_type(SUBENTRY_THERMOSTAT)[-1].subentry_id)
 
 
 CLIMATE = "climate.living_room"

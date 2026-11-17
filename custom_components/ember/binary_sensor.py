@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import EmberConfigEntry
+from .const import SUBENTRY_CENTRAL_HEATING
 from .demand import DemandEntity
 
 
@@ -15,8 +16,12 @@ async def async_setup_entry(
     entry: EmberConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add the heating demand sensor."""
-    async_add_entities([HeatingDemand(entry, "heating_demand")])
+    """Add the demand sensor to the central heating, if there is one."""
+    for subentry in entry.get_subentries_of_type(SUBENTRY_CENTRAL_HEATING):
+        async_add_entities(
+            [HeatingDemand(entry, subentry, "heating_demand")],
+            config_subentry_id=subentry.subentry_id,
+        )
 
 
 class HeatingDemand(DemandEntity, BinarySensorEntity):
