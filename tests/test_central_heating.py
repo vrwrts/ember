@@ -1,6 +1,7 @@
 """The central heating subentry, its checklist and the migration that adds it."""
 
 import orjson
+import pytest
 
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
@@ -161,7 +162,9 @@ async def test_add_button_only_without_central_heating(
     assert _menu(entry) == ["thermostat"]
 
 
-async def test_migration_keeps_entity_ids(hass: HomeAssistant, devices: Devices) -> None:
+async def test_migration_keeps_entity_ids(
+    hass: HomeAssistant, devices: Devices, caplog: pytest.LogCaptureFixture
+) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Ember",
@@ -211,3 +214,4 @@ async def test_migration_keeps_entity_ids(hass: HomeAssistant, devices: Devices)
         assert device is not None
         assert device.identifiers == {(DOMAIN, subentry_id)}
     assert state(hass, "binary_sensor.ember_heating_demand").state == "on"
+    assert "deprecated" not in caplog.text

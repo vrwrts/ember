@@ -86,7 +86,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EmberConfigEntry) -> b
         # before removing it, so they keep their entity ids and move to the
         # subentry's device on setup.
         devices = dr.async_get(hass)
-        if device := devices.async_get_device(identifiers={(DOMAIN, entry.entry_id)}):
+        if device := devices.async_get_device_by_identifier(
+            (DOMAIN, entry.entry_id), entry.entry_id
+        ):
             entities = er.async_get(hass)
             for entity in er.async_entries_for_device(entities, device.id, True):
                 entities.async_update_entity(entity.entity_id, device_id=None)
