@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from freezegun.api import FrozenDateTimeFactory
+import pytest
 
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant.common import async_fire_time_changed
@@ -160,6 +161,7 @@ async def test_closing_valve_turns_trv_off_and_opening_turns_it_on(
     assert state(hass, "climate.trv").attributes["temperature"] == 35
 
 
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
 async def test_only_valve_thermostats_have_a_valve_entity(
     hass: HomeAssistant, devices: Devices
 ) -> None:
@@ -169,4 +171,8 @@ async def test_only_valve_thermostats_have_a_valve_entity(
     assert hass.states.async_entity_ids("valve") == ["valve.valve_valve"]
     assert [e for e in hass.states.async_entity_ids("sensor") if e.endswith("_output")] == [
         "sensor.switch_output"
+    ]
+    assert [e for e in hass.states.async_entity_ids("sensor") if e.endswith("_integral")] == [
+        "sensor.valve_integral",
+        "sensor.switch_integral",
     ]

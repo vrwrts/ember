@@ -59,8 +59,9 @@ Several devices, such as the TRVs of one room, can share a thermostat. Each gets
 
 - **Valve** (valve thermostats): how far the TRV's valve is open, read from its opening degree. Opening, closing or setting a position writes it to the TRV straight away and puts the thermostat under manual control, so Ember leaves it there until manual control ends. Closing also turns the TRV off.
 - **Output** (switch thermostats): the share of each cycle the switches are on, in %. It is 0 while the thermostat is off or a window is open, and unknown under manual control.
+- **Integral** (switch and valve thermostats, disabled by default): the integral term of the PID controller, in %. Once the room has settled, it is roughly the output the room needs to hold its target, which helps when tuning. It keeps its value while the thermostat is off, a window is open or the thermostat is under manual control.
 
-Pass-through thermostats have neither, as their devices regulate themselves.
+Pass-through thermostats have none of these, as their devices regulate themselves.
 
 ## Ember settings
 

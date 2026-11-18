@@ -293,6 +293,9 @@
       },
       "output": {
         "name": "Output"
+      },
+      "integral": {
+        "name": "Integral"
       }
     },
     "valve": {
