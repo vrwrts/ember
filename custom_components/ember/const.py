@@ -51,6 +51,7 @@ CONF_CLOSE_DELAY: Final = "close_delay"
 SECTION_MANUAL: Final = "manual_control"
 CONF_TIMEOUT: Final = "timeout"
 
+CONF_AREA: Final = "area"
 CONF_SENSOR: Final = "temperature_sensor"
 CONF_HEATERS: Final = "heaters"
 CONF_OPENING: Final = "opening_degree"

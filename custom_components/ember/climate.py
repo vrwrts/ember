@@ -13,6 +13,7 @@ from homeassistant.components.climate import (
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import ExtraStoredData, RestoredExtraData, RestoreEntity
@@ -56,8 +57,12 @@ class EmberClimate(ClimateEntity, RestoreEntity):
         """Initialise."""
         self.thermostat = thermostat
         self._attr_unique_id = thermostat.subentry_id
+        # HA only uses suggested_area when it creates the device, so a later move in HA stays.
+        area = thermostat.area and ar.async_get(thermostat.hass).async_get_area(thermostat.area)
         self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, thermostat.subentry_id)}, name=thermostat.title
+            identifiers={(DOMAIN, thermostat.subentry_id)},
+            name=thermostat.name,
+            suggested_area=area.name if area else None,
         )
         self._refresh()
 

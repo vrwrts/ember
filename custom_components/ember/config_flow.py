@@ -20,7 +20,9 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import section
+from homeassistant.helpers import area_registry as ar, device_registry as dr
 from homeassistant.helpers.selector import (
+    AreaSelector,
     BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
@@ -37,6 +39,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     AWAY_SUFFIX,
     CENTRAL_HEATING_SUBENTRY,
+    CONF_AREA,
     CONF_CENTRAL_HEATING,
     CONF_CLOSE_DELAY,
     CONF_CLOSING,
@@ -206,6 +209,9 @@ PAGES: dict[str, Callable[[dict[str, Any]], probatio.Schema]] = {
 def _thermostat_schema(values: dict[str, Any]) -> probatio.Schema:
     return probatio.Schema(
         {
+            probatio.Optional(
+                CONF_AREA, description={"suggested_value": values.get(CONF_AREA)}
+            ): AreaSelector(),
             probatio.Required(
                 CONF_NAME, description={"suggested_value": values.get(CONF_NAME)}
             ): TextSelector(),
@@ -424,8 +430,19 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
     ) -> SubentryFlowResult:
         """Change a thermostat."""
         subentry = self._get_reconfigure_subentry()
-        values = {CONF_NAME: subentry.title, **subentry.data}
+        # Thermostats from before the area field have no name of their own.
+        values = {**subentry.data, CONF_NAME: subentry.data.get(CONF_NAME, subentry.title)}
+        values.pop(CONF_AREA, None)
+        # Show the area the device is in now, which may have been changed in HA.
+        if (device := self._device()) is not None and device.area_id:
+            values[CONF_AREA] = device.area_id
         return await self._async_step_main("reconfigure", values, user_input)
+
+    def _device(self) -> dr.DeviceEntry | None:
+        subentry_id = self._get_reconfigure_subentry().subentry_id
+        return dr.async_get(self.hass).async_get_device_by_identifier(
+            (DOMAIN, subentry_id), self._get_entry().entry_id
+        )
 
     async def _async_step_main(
         self, step_id: str, values: dict[str, Any], user_input: dict[str, Any] | None
@@ -434,10 +451,14 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         if user_input is not None:
             data = dict(user_input)
             if not (errors := _validate(data)):
-                self._title = data.pop(CONF_NAME)
+                self._title = data[CONF_NAME]
+                if (area_id := data.get(CONF_AREA)) and (
+                    area := ar.async_get(self.hass).async_get_area(area_id)
+                ):
+                    self._title = f"{area.name} {data[CONF_NAME]}"
                 # Keep the rest of an existing thermostat's settings as the starting point.
-                self._data = {**{k: v for k, v in values.items() if k != CONF_NAME}, **data}
-                for key in (CONF_OPENING, CONF_CLOSING, CONF_WINDOW):
+                self._data = {**values, **data}
+                for key in (CONF_AREA, CONF_OPENING, CONF_CLOSING, CONF_WINDOW):
                     if key not in data:
                         self._data.pop(key, None)
                 return await self.async_step_settings()
@@ -500,6 +521,9 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
             data.pop(SECTION_CONTROL, None)
         if self.source == "user":
             return self.async_create_entry(title=self._title, data=data)
+        # A new device gets its area from suggested_area, an existing one has to be moved.
+        if (device := self._device()) is not None and device.area_id != data.get(CONF_AREA):
+            dr.async_get(self.hass).async_update_device(device.id, area_id=data.get(CONF_AREA))
         return self.async_update_and_abort(
             self._get_entry(), self._get_reconfigure_subentry(), title=self._title, data=data
         )
