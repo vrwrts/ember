@@ -5,7 +5,9 @@ from datetime import timedelta
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant.common import async_fire_time_changed
 
 from .conftest import SWITCH, Devices, add_thermostat, call, central, set_temperature, state
@@ -90,3 +92,42 @@ async def test_output_sensor(
     await call(hass, "set_hvac_mode", hvac_mode="off")
     assert not handle.thermostat.manual
     assert state(hass, OUTPUT).state == "0.0"
+
+
+INTEGRAL = "sensor.living_room_integral"
+
+
+async def test_integral_sensor_is_disabled_by_default(
+    hass: HomeAssistant, devices: Devices
+) -> None:
+    await add_thermostat(hass, SWITCH)
+    entity = er.async_get(hass).async_get(INTEGRAL)
+    assert entity is not None
+    assert entity.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entity.entity_category is EntityCategory.DIAGNOSTIC
+
+
+@pytest.mark.usefixtures("entity_registry_enabled_by_default")
+async def test_integral_sensor(
+    hass: HomeAssistant, devices: Devices, freezer: FrozenDateTimeFactory
+) -> None:
+    handle = await add_thermostat(
+        hass, SWITCH, options=central(control={"kp": 50, "ki": 0.01, "kd": 0})
+    )
+    assert state(hass, INTEGRAL).state == "0.0"
+    assert state(hass, INTEGRAL).attributes["unit_of_measurement"] == "%"
+
+    # One 300 s interval 1 K below target adds 0.01 x 1 x 300.
+    freezer.tick(timedelta(seconds=300))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert state(hass, INTEGRAL).state == "3.0"
+
+    # Past the settle window after Ember's last switch, so the change counts as manual.
+    freezer.tick(timedelta(seconds=60))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    devices.heater.external(is_on=True)
+    await hass.async_block_till_done()
+    assert handle.thermostat.manual
+    assert state(hass, INTEGRAL).state == "3.0"

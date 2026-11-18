@@ -1,9 +1,9 @@
-"""How many thermostats in central heating call for heat, and each switch thermostat's output."""
+"""How many thermostats in central heating call for heat, and each thermostat's output and integral."""
 
 from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
-from homeassistant.const import PERCENTAGE
+from homeassistant.const import PERCENTAGE, EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import EmberConfigEntry
 from .const import DOMAIN, SUBENTRY_CENTRAL_HEATING
 from .demand import DemandEntity
-from .thermostat import TYPE_SWITCH, Thermostat
+from .thermostat import TYPE_PASS_THROUGH, TYPE_SWITCH, Thermostat
 
 
 async def async_setup_entry(
@@ -19,7 +19,7 @@ async def async_setup_entry(
     entry: EmberConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Add the central heating's demand count and each switch thermostat's output."""
+    """Add the central heating's demand count, and each thermostat's output and integral."""
     for subentry in entry.get_subentries_of_type(SUBENTRY_CENTRAL_HEATING):
         async_add_entities(
             [CallingForHeat(entry, subentry, "calling_for_heat")],
@@ -28,6 +28,8 @@ async def async_setup_entry(
     for subentry_id, thermostat in entry.runtime_data.items():
         if thermostat.kind == TYPE_SWITCH:
             async_add_entities([Output(thermostat)], config_subentry_id=subentry_id)
+        if thermostat.kind != TYPE_PASS_THROUGH:
+            async_add_entities([Integral(thermostat)], config_subentry_id=subentry_id)
 
 
 class CallingForHeat(DemandEntity, SensorEntity):
@@ -68,3 +70,20 @@ class Output(SensorEntity):
         # Under manual control Ember isn't driving the switches, so it has no output.
         t = self.thermostat
         self._attr_native_value = None if t.manual else round(t.output or 0.0, 1)
+
+
+class Integral(Output):
+    """The PID's integral term: the share of output the room needs to hold its target."""
+
+    _attr_translation_key = "integral"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, thermostat: Thermostat) -> None:
+        """Initialise."""
+        super().__init__(thermostat)
+        self._attr_unique_id = f"{thermostat.subentry_id}_integral"
+
+    def _refresh(self) -> None:
+        # Held, not reset, while Ember isn't driving, so shown as is.
+        self._attr_native_value = round(self.thermostat.pid.integral, 1)
