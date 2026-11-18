@@ -101,6 +101,10 @@ SERVICE_RESUME: Final = "resume"
 # Smallest valve change worth a write. Battery TRVs pay for every radio message,
 # and a few percent makes no difference to the room.
 VALVE_DEADBAND: Final = 5
+# Seconds a smaller change must keep pointing the same way before it is written
+# anyway. Without it the integral can't fine-tune a steady opening, which leaves
+# the room cycling; this caps those writes at three pairs an hour.
+VALVE_SUSTAIN: Final = 20 * 60
 # Above this opening, in percent, a valve counts as calling for heat.
 DEMAND_THRESHOLD: Final = 5
 # Seconds after our own write in which reports from that device are not manual.
