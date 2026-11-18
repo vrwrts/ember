@@ -53,6 +53,56 @@ async def test_small_changes_are_not_written(
     assert devices.closing.calls[-1] == 75
 
 
+async def _step(hass: HomeAssistant, freezer: FrozenDateTimeFactory, steps: int = 1) -> None:
+    for _ in range(steps):
+        freezer.tick(timedelta(seconds=301))
+        async_fire_time_changed(hass)
+        await hass.async_block_till_done()
+
+
+async def test_sustained_small_change_is_written(
+    hass: HomeAssistant, devices: Devices, freezer: FrozenDateTimeFactory
+) -> None:
+    await add_thermostat(hass, VALVE, options=P_ONLY)
+    devices.opening.calls.clear()
+    set_temperature(hass, 16.04)
+    # The first step starts the wait, and 20 minutes later the 48 goes through.
+    await _step(hass, freezer, 4)
+    assert devices.opening.calls == []
+    await _step(hass, freezer)
+    assert devices.opening.calls == [48]
+    assert devices.closing.calls[-1] == 52
+
+
+async def test_small_change_that_turns_round_waits_again(
+    hass: HomeAssistant, devices: Devices, freezer: FrozenDateTimeFactory
+) -> None:
+    await add_thermostat(hass, VALVE, options=P_ONLY)
+    devices.opening.calls.clear()
+    set_temperature(hass, 16.04)
+    await _step(hass, freezer, 3)
+    set_temperature(hass, 15.96)
+    await _step(hass, freezer, 4)
+    assert devices.opening.calls == []
+    await _step(hass, freezer)
+    assert devices.opening.calls == [52]
+
+
+async def test_manual_control_restarts_the_wait(
+    hass: HomeAssistant, devices: Devices, freezer: FrozenDateTimeFactory
+) -> None:
+    handle = await add_thermostat(hass, VALVE, options=P_ONLY)
+    devices.opening.calls.clear()
+    set_temperature(hass, 16.04)
+    await _step(hass, freezer, 2)
+    devices.trv.external(native_target_temperature=22)
+    await hass.async_block_till_done()
+    assert handle.thermostat.manual
+    while handle.thermostat.manual:
+        await _step(hass, freezer)
+    assert devices.opening.calls == []
+
+
 async def test_full_close_is_always_written(
     hass: HomeAssistant, devices: Devices, freezer: FrozenDateTimeFactory
 ) -> None:

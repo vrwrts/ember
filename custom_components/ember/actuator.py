@@ -33,6 +33,7 @@ from .const import (
     SETTLE_WINDOW,
     TEMP_TOLERANCE,
     VALVE_DEADBAND,
+    VALVE_SUSTAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -237,6 +238,8 @@ class ValveActuator(_ClimateMixin, Actuator):
         self.climate = climate
         self.opening = opening
         self.closing = closing
+        # Per entity: the direction of a pending sub-deadband change, and since when.
+        self._pending: dict[str, tuple[bool, float]] = {}
 
     def _value(self, state: State) -> Any:
         if state.entity_id == self.climate:
@@ -291,6 +294,7 @@ class ValveActuator(_ClimateMixin, Actuator):
         value = min(max(round(value / step) * step, low), high)
         current = _float(state.state)
         if current is not None and abs(value - current) < NUMBER_TOLERANCE:
+            self._pending.pop(entity_id, None)
             return
         if (
             not force
@@ -298,8 +302,19 @@ class ValveActuator(_ClimateMixin, Actuator):
             and percent not in (0, 100)
             and abs(value - current) / (high - low) * 100 < VALVE_DEADBAND
         ):
-            return
+            up, now = value > current, monotonic_time.monotonic()
+            pending = self._pending.get(entity_id)
+            if pending is None or pending[0] != up:
+                self._pending[entity_id] = (up, now)
+                return
+            if now - pending[1] < VALVE_SUSTAIN:
+                return
+        self._pending.pop(entity_id, None)
         await self._call("number", "set_value", entity_id, value, value=value)
+
+    def suspend(self) -> None:
+        """Forget pending small changes, so a pause doesn't count towards them."""
+        self._pending.clear()
 
     async def async_hand_back(self, target: float, heating: bool, manual: bool) -> None:
         """Reset both degrees to their maximum and give the TRV Ember's target."""

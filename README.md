@@ -38,7 +38,8 @@ For a TRV with valve opening degree and closing degree entities, such as the Son
 - the TRV is kept in heat with its setpoint at its maximum, so its own regulation always wants to open;
 - Ember writes the output to the opening degree, and 100 minus the output to the closing degree;
 - values are scaled to each entity's range;
-- a new value is only written when it changes by at least 5 %, or to close or open the valve fully. Battery TRVs pay for every write.
+- a new value is only written when it changes by at least 5 %, or to close or open the valve fully. Battery TRVs pay for every write;
+- a smaller change is written once the output has stayed above, or below, the valve's position for 20 minutes. This lets Ember fine-tune a steady opening without writing more than a few times an hour.
 
 ### Pass-through
 
