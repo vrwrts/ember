@@ -18,7 +18,11 @@
       "heating_demand": { "default": "mdi:fire", "state": { "off": "mdi:fire-off" } }
     },
     "sensor": {
-      "calling_for_heat": { "default": "mdi:radiator" }
+      "calling_for_heat": { "default": "mdi:radiator" },
+      "output": { "default": "mdi:gauge" }
+    },
+    "valve": {
+      "valve": { "default": "mdi:valve" }
     }
   },
   "services": {

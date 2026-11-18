@@ -250,12 +250,19 @@ class ValveActuator(_ClimateMixin, Actuator):
 
     async def async_update(self, heating: bool, output: float | None, target: float) -> None:
         """Close the valve and turn the TRV off, or pin the TRV and set the valve."""
+        await self._async_apply(heating, output or 0.0, force=False)
+
+    async def async_set_position(self, percent: float) -> None:
+        """Set the valve as asked by the user, past the deadband."""
+        await self._async_apply(percent > 0, percent, force=True)
+
+    async def _async_apply(self, heating: bool, opening: float, force: bool) -> None:
         state = self.hass.states.get(self.climate)
         if not _usable(state):
             return
         if not heating:
-            await self._async_write(self.opening, 0)
-            await self._async_write(self.closing, 100)
+            await self._async_write(self.opening, 0, force)
+            await self._async_write(self.closing, 100, force)
             if state.state != HVACMode.OFF:
                 await self._call(
                     "climate", "set_hvac_mode", self.climate, (HVACMode.OFF, None),
@@ -270,9 +277,8 @@ class ValveActuator(_ClimateMixin, Actuator):
                 "climate", "set_temperature", self.climate, (HVACMode.HEAT, pinned),
                 temperature=pinned, hvac_mode=HVACMode.HEAT,
             )
-        opening = output or 0.0
-        await self._async_write(self.opening, opening)
-        await self._async_write(self.closing, 100 - opening)
+        await self._async_write(self.opening, opening, force)
+        await self._async_write(self.closing, 100 - opening, force)
 
     async def _async_write(self, entity_id: str, percent: float, force: bool = False) -> None:
         state = self.hass.states.get(entity_id)
@@ -309,16 +315,22 @@ class ValveActuator(_ClimateMixin, Actuator):
             temperature=temperature, hvac_mode=mode,
         )
 
+    def opening_percent(self) -> float | None:
+        """How far the valve is open, from its opening degree entity."""
+        state = self.hass.states.get(self.opening)
+        if not _usable(state) or (value := _float(state.state)) is None:
+            return None
+        low = _float(state.attributes.get("min")) or 0.0
+        high = _float(state.attributes.get("max")) or 100.0
+        return (value - low) / (high - low) * 100
+
     def calling_for_heat(self) -> bool:
         """The TRV is on and its valve open beyond the demand threshold."""
         climate = self.hass.states.get(self.climate)
-        opening = self.hass.states.get(self.opening)
-        if not (_usable(climate) and _usable(opening)) or climate.state == HVACMode.OFF:
+        if not _usable(climate) or climate.state == HVACMode.OFF:
             return False
-        value = _float(opening.state)
-        low = _float(opening.attributes.get("min")) or 0.0
-        high = _float(opening.attributes.get("max")) or 100.0
-        return value is not None and (value - low) / (high - low) * 100 > DEMAND_THRESHOLD
+        opening = self.opening_percent()
+        return opening is not None and opening > DEMAND_THRESHOLD
 
 
 class PassThroughActuator(_ClimateMixin, Actuator):

@@ -290,6 +290,14 @@
     "sensor": {
       "calling_for_heat": {
         "name": "Thermostats calling for heat"
+      },
+      "output": {
+        "name": "Output"
+      }
+    },
+    "valve": {
+      "valve": {
+        "name": "Valve"
       }
     }
   },

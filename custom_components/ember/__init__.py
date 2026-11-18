@@ -33,7 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 
 type EmberConfigEntry = ConfigEntry[dict[str, Thermostat]]
 
-PLATFORMS = [Platform.CLIMATE, Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS = [Platform.CLIMATE, Platform.BINARY_SENSOR, Platform.SENSOR, Platform.VALVE]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
