@@ -56,6 +56,7 @@ from .const import (
     CONF_MIN_SWITCH_TIME,
     CONF_OPEN_DELAY,
     CONF_OPENING,
+    CONF_REFERENCE,
     CONF_SENSOR,
     CONF_SENSOR_TIMEOUT,
     CONF_TIMEOUT,
@@ -71,7 +72,9 @@ from .const import (
     SECTION_PRESENCE,
     SECTION_PRESETS,
     SECTION_SAFETY,
+    SECTION_SUPPLY,
     SECTION_WINDOW,
+    SUPPLY_MIN_DELTA,
 )
 from .pid import PID
 
@@ -103,6 +106,8 @@ class Thermostat:
             central[SECTION_CONTROL] if data[CONF_USE_CENTRAL_CONTROL] else data[SECTION_CONTROL]
         )
         self.presence_entity: str | None = central[SECTION_PRESENCE].get(CONF_ENTITY)
+        self.supply_entity: str | None = central[SECTION_SUPPLY].get(CONF_ENTITY)
+        self.supply_reference = float(central[SECTION_SUPPLY][CONF_REFERENCE])
         self.safety = central[SECTION_SAFETY]
         self.window_options = central[SECTION_WINDOW]
         self.manual_timeout = timedelta(minutes=float(central[SECTION_MANUAL][CONF_TIMEOUT]))
@@ -278,7 +283,10 @@ class Thermostat:
     @property
     def current_temperature(self) -> float | None:
         """The room temperature in °C, or None if the sensor has no usable reading."""
-        state = self.hass.states.get(self.sensor)
+        return self._celsius(self.sensor)
+
+    def _celsius(self, entity_id: str) -> float | None:
+        state = self.hass.states.get(entity_id)
         if state is None:
             return None
         try:
@@ -289,6 +297,18 @@ class Thermostat:
         if unit != UnitOfTemperature.CELSIUS and unit in TemperatureConverter.VALID_UNITS:
             value = TemperatureConverter.convert(value, unit, UnitOfTemperature.CELSIUS)
         return value
+
+    def _supply_gain(self, current: float) -> float:
+        """How much more output the room needs than at the reference supply.
+
+        A radiator gives off heat roughly in proportion to how much hotter its
+        water is than the room, so a colder supply needs a wider valve.
+        """
+        if not self.supply_entity or (supply := self._celsius(self.supply_entity)) is None:
+            return 1.0
+        return max(self.supply_reference - current, SUPPLY_MIN_DELTA) / max(
+            supply - current, SUPPLY_MIN_DELTA
+        )
 
     def _sensor_stale(self) -> bool:
         state = self.hass.states.get(self.sensor)
@@ -375,7 +395,9 @@ class Thermostat:
                     output = float(self.safety[CONF_FALLBACK_OUTPUT])
                     self.pid.pause()
                 else:
-                    output = self.pid.update(target, current, monotonic_time.monotonic())
+                    output = self.pid.update(
+                        target, current, monotonic_time.monotonic(), self._supply_gain(current)
+                    )
             else:
                 self.pid.pause()
             self.output = output if heat else None

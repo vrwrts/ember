@@ -6,7 +6,7 @@ The aim is a small integration with few options. Prefer leaving a feature out ov
 
 ## Architecture
 
-There is one config entry (`single_config_entry`) with the central settings in its options: presence, presets, control, safety, windows and manual control. Each thermostat is a subentry. Its data holds its devices and toggles, plus its own `presets` or `control` section when it doesn't use the central ones. One `central_heating` subentry holds the demand entities. The config flow creates it, `async_migrate_entry` adds it to entries from before minor version 2, and a user who deletes it can add it back. `async_get_supported_subentry_types` only offers the central heating type while there is none, which hides its Add button. HA caches those types until restart, so `_reset_subentry_types` in `__init__.py` clears HA's private `_supported_subentry_types` on every entry update. That function is the only place touching that private attribute.
+There is one config entry (`single_config_entry`) with the central settings in its options: presence, presets, control, supply temperature, safety, windows and manual control. Each thermostat is a subentry. Its data holds its devices and toggles, plus its own `presets` or `control` section when it doesn't use the central ones. One `central_heating` subentry holds the demand entities. The config flow creates it, `async_migrate_entry` adds it to entries from before minor version 2, and a user who deletes it can add it back. `async_get_supported_subentry_types` only offers the central heating type while there is none, which hides its Add button. HA caches those types until restart, so `_reset_subentry_types` in `__init__.py` clears HA's private `_supported_subentry_types` on every entry update. That function is the only place touching that private attribute.
 
 ```
 config entry (options: central settings)
@@ -21,7 +21,7 @@ config entry (options: central settings)
 - `config_flow.py` holds the config flow, the options flow and the subentry flow. The config flow creates the entry with `DEFAULT_CENTRAL`. The options flow opens a menu with one page per group of central settings (`PAGES`), a `central_heating` checklist page (only with a central heating and thermostats) and a `save` item labelled "Save and close". Submitting a page keeps its values in the flow and returns to the menu, and `save` writes them all at once. The checklist writes each thermostat's own `central_heating` toggle, so that toggle stays the single source. The subentry flow asks for devices in `user`/`reconfigure`, then for central heating and the two "use central" toggles in `settings`. The `presets` and `control` pages follow only for toggles that are off. Presets are stored flat (`comfort`, `comfort_away`) but shown as a section per preset with a home and an away field (`_presets_schema`, `_presets_from_form`).
 - `thermostat.py` holds all behaviour of one thermostat:
   - the target from preset and presence, or a temperature set by hand;
-  - the control loop on a fixed interval: PID output, window pause, stale sensor fallback with a repair issue;
+  - the control loop on a fixed interval: PID output, scaled for the supply temperature when a supply sensor is set, window pause, stale sensor fallback with a repair issue;
   - manual control with its timeout;
   - restore data, and the hand-back on `EVENT_HOMEASSISTANT_STOP`.
   - It tells listeners (the entities) when something changes.

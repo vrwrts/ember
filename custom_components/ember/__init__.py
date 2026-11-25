@@ -22,7 +22,9 @@ from homeassistant.util.hass_dict import HassKey
 
 from .const import (
     CENTRAL_HEATING_SUBENTRY,
+    DEFAULT_CENTRAL,
     DOMAIN,
+    SECTION_SUPPLY,
     SERVICE_RESUME,
     SUBENTRY_CENTRAL_HEATING,
     SUBENTRY_THERMOSTAT,
@@ -74,7 +76,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: EmberConfigEntry) -> bool:
-    """Add the central heating subentry to entries from before it existed."""
+    """Bring entries from older versions up to date."""
     if entry.version > 1:
         return False
     if entry.minor_version < 2:
@@ -95,6 +97,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: EmberConfigEntry) -> b
             devices.async_remove_device(device.id)
         hass.config_entries.async_update_entry(entry, minor_version=2)
         _reset_subentry_types(entry)
+    if entry.minor_version < 3:
+        hass.config_entries.async_update_entry(
+            entry,
+            options={SECTION_SUPPLY: DEFAULT_CENTRAL[SECTION_SUPPLY], **entry.options},
+            minor_version=3,
+        )
     return True
 
 

@@ -38,6 +38,7 @@ async def test_options_menu(hass: HomeAssistant, devices: Devices) -> None:
         "presence",
         "presets",
         "control",
+        "supply",
         "safety",
         "window",
         "manual_control",
@@ -107,6 +108,16 @@ async def test_several_pages_then_save(hass: HomeAssistant, devices: Devices) ->
     assert handle.entry.options["manual_control"] == {"timeout": 15}
     assert handle.entry.options["presets"] == DEFAULT_CENTRAL["presets"]
     assert handle.thermostat.presence_entity == "person.anna"
+
+
+async def test_supply_page(hass: HomeAssistant, devices: Devices) -> None:
+    handle = await add_thermostat(hass, SWITCH)
+    flow_id = (await hass.config_entries.options.async_init(handle.entry.entry_id))["flow_id"]
+    await _open_page(hass, flow_id, "supply")
+    await _submit_page(hass, flow_id, {"entity": "sensor.supply", "reference": 60})
+    await _save(hass, flow_id)
+    assert handle.entry.options["supply"] == {"entity": "sensor.supply", "reference": 60}
+    assert handle.thermostat.supply_entity == "sensor.supply"
 
 
 async def test_clearing_presence(hass: HomeAssistant, devices: Devices) -> None:

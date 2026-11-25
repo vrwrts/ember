@@ -40,6 +40,9 @@ CONF_INTERVAL: Final = "interval"
 CONF_CYCLE: Final = "cycle"
 CONF_MIN_SWITCH_TIME: Final = "min_switch_time"
 
+SECTION_SUPPLY: Final = "supply"
+CONF_REFERENCE: Final = "reference"
+
 SECTION_SAFETY: Final = "safety"
 CONF_SENSOR_TIMEOUT: Final = "sensor_timeout"
 CONF_FALLBACK_OUTPUT: Final = "fallback_output"
@@ -87,6 +90,7 @@ DEFAULT_CENTRAL: Final = {
     SECTION_PRESENCE: {},
     SECTION_PRESETS: DEFAULT_PRESETS,
     SECTION_CONTROL: DEFAULT_CONTROL,
+    SECTION_SUPPLY: {CONF_REFERENCE: 55},
     SECTION_SAFETY: {CONF_SENSOR_TIMEOUT: 120, CONF_FALLBACK_OUTPUT: 20},
     SECTION_WINDOW: {CONF_OPEN_DELAY: 30, CONF_CLOSE_DELAY: 0},
     SECTION_MANUAL: {CONF_TIMEOUT: 60},
@@ -123,5 +127,9 @@ PID_MAX_DT: Final = 900
 # integral climbed from about 15 to 50 % during each morning warm-up, which
 # overshot the room by up to 1 K and then left it below target.
 INTEGRAL_BAND: Final = 0.5
+# Smallest supply minus room temperature, in kelvin, that output is scaled by.
+# Closer than this the water barely heats, such as with the fire out, so the
+# output goes to 100 % and the integral holds instead of dividing by nearly 0.
+SUPPLY_MIN_DELTA: Final = 5
 # Longest HA shutdown waits for the hand-back writes to go out.
 HAND_BACK_TIMEOUT: Final = 10
