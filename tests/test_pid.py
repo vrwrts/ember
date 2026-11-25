@@ -64,3 +64,31 @@ def test_pause_skips_the_paused_time() -> None:
 
 def test_restored_integral_is_clamped() -> None:
     assert PID(1, 1, 1, integral=150).integral == 100
+
+
+def test_no_windup_while_warming_up_towards_the_target() -> None:
+    pid = PID(kp=60, ki=0.01, kd=0, integral=15)
+    for step, measurement in enumerate((17.6, 18.0, 18.4, 18.8, 19.2, 19.4)):
+        pid.update(20, measurement, step * 300)
+    assert pid.integral == 15
+
+
+def test_no_unwinding_while_cooling_back_after_an_overshoot() -> None:
+    pid = PID(kp=30, ki=0.01, kd=0, integral=30)
+    for step, measurement in enumerate((21.0, 20.9, 20.8, 20.6)):
+        pid.update(20, measurement, step * 300)
+    assert pid.integral == 30
+
+
+def test_integrates_near_the_target_while_approaching() -> None:
+    pid = PID(kp=0, ki=0.01, kd=0)
+    pid.update(20, 19.6, 0)
+    pid.update(20, 19.8, 300)
+    assert pid.integral == pytest.approx(0.6)
+
+
+def test_integrates_when_stuck_away_from_the_target() -> None:
+    pid = PID(kp=0, ki=0.01, kd=0)
+    pid.update(20, 19.3, 0)
+    pid.update(20, 19.3, 300)
+    assert pid.integral == pytest.approx(2.1)
