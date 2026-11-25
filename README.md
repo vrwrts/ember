@@ -94,6 +94,8 @@ While nobody is home (person not `home`, zone count 0, sensor off), thermostats 
 | Switch cycle | 10 min | Switches are on for the output's share of each cycle. |
 | Minimum switch on or off time | 30 s | Shorter on or off periods are skipped. |
 
+More than 0.5 °C from the target, the integral pauses while the room is already moving towards the target. That keeps a morning warm-up from building up an overshoot.
+
 The defaults start from Better Thermostat's. Every room is different, so expect to tune them.
 
 ### Safety

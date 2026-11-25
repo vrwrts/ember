@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .const import PID_MAX_DT
+from .const import INTEGRAL_BAND, PID_MAX_DT
 
 OUTPUT_MIN = 0.0
 OUTPUT_MAX = 100.0
@@ -39,7 +39,12 @@ class PID:
         # already saturated in the direction the error pushes it.
         saturated_high = unclamped >= OUTPUT_MAX and error > 0
         saturated_low = unclamped <= OUTPUT_MIN and error < 0
-        if dt > 0 and not (saturated_high or saturated_low):
+        # Away from the target, only integrate while the room isn't already
+        # moving towards it. Integrating through a warm-up or a cool-down
+        # winds the integral up for an overshoot, then a dip as it unwinds.
+        approaching = error * derivative < 0
+        far = abs(error) > INTEGRAL_BAND
+        if dt > 0 and not (saturated_high or saturated_low or (far and approaching)):
             self.integral = min(
                 max(self.integral + self.ki * error * dt, OUTPUT_MIN), OUTPUT_MAX
             )

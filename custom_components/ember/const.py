@@ -118,5 +118,10 @@ NUMBER_TOLERANCE: Final = 1
 # Longest gap the PID integrates over. After a long gap, such as HA being down,
 # integrating the whole gap would wind the output up on stale information.
 PID_MAX_DT: Final = 900
+# Kelvin from the target within which the integral always adjusts. Further
+# away it pauses while the room moves towards the target. In the Office the
+# integral climbed from about 15 to 50 % during each morning warm-up, which
+# overshot the room by up to 1 K and then left it below target.
+INTEGRAL_BAND: Final = 0.5
 # Longest HA shutdown waits for the hand-back writes to go out.
 HAND_BACK_TIMEOUT: Final = 10
