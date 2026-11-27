@@ -119,3 +119,21 @@ async def test_migration_adds_the_supply_settings(hass: HomeAssistant, devices: 
     await hass.async_block_till_done()
     assert entry.minor_version == 3
     assert entry.options["supply"] == {"reference": 55}
+
+
+async def test_supply_jump_acts_straight_away(hass: HomeAssistant, devices: Devices) -> None:
+    _supply(hass, 60)
+    await add_thermostat(hass, VALVE, options=OPTIONS)
+    _supply(hass, 104)
+    await hass.async_block_till_done()
+    assert _opening(hass) == 25
+
+
+async def test_small_supply_change_waits_for_the_next_tick(
+    hass: HomeAssistant, devices: Devices
+) -> None:
+    _supply(hass, 60)
+    handle = await add_thermostat(hass, VALVE, options=OPTIONS)
+    _supply(hass, 62)
+    await hass.async_block_till_done()
+    assert handle.thermostat.output == 50

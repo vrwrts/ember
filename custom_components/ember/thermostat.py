@@ -74,6 +74,7 @@ from .const import (
     SECTION_SAFETY,
     SECTION_SUPPLY,
     SECTION_WINDOW,
+    SUPPLY_JUMP,
     SUPPLY_MIN_DELTA,
 )
 from .pid import PID
@@ -108,6 +109,8 @@ class Thermostat:
         self.presence_entity: str | None = central[SECTION_PRESENCE].get(CONF_ENTITY)
         self.supply_entity: str | None = central[SECTION_SUPPLY].get(CONF_ENTITY)
         self.supply_reference = float(central[SECTION_SUPPLY][CONF_REFERENCE])
+        # The supply the last output was scaled for.
+        self._supply: float | None = None
         self.safety = central[SECTION_SAFETY]
         self.window_options = central[SECTION_WINDOW]
         self.manual_timeout = timedelta(minutes=float(central[SECTION_MANUAL][CONF_TIMEOUT]))
@@ -192,6 +195,10 @@ class Thermostat:
                 async_track_state_change_event(
                     self.hass, self.presence_entity, self._handle_presence
                 )
+            )
+        if self.supply_entity and self.kind != TYPE_PASS_THROUGH:
+            watch(
+                async_track_state_change_event(self.hass, self.supply_entity, self._handle_supply)
             )
         if self.window:
             watch(async_track_state_change_event(self.hass, self.window, self._handle_window))
@@ -304,7 +311,8 @@ class Thermostat:
         A radiator gives off heat roughly in proportion to how much hotter its
         water is than the room, so a colder supply needs a wider valve.
         """
-        if not self.supply_entity or (supply := self._celsius(self.supply_entity)) is None:
+        self._supply = self._celsius(self.supply_entity) if self.supply_entity else None
+        if (supply := self._supply) is None:
             return 1.0
         return max(self.supply_reference - current, SUPPLY_MIN_DELTA) / max(
             supply - current, SUPPLY_MIN_DELTA
@@ -427,6 +435,17 @@ class Thermostat:
         if self.stale and not self._sensor_stale():
             self.hass.async_create_task(self.async_control(), eager_start=False)
         self._notify()
+
+    @callback
+    def _handle_supply(self, _event: Event[EventStateChangedData]) -> None:
+        assert self.supply_entity
+        supply = self._celsius(self.supply_entity)
+        if (
+            supply is not None
+            and self._supply is not None
+            and abs(supply - self._supply) >= SUPPLY_JUMP
+        ):
+            self.hass.async_create_task(self.async_control(), eager_start=False)
 
     @callback
     def _handle_presence(self, _event: Event[EventStateChangedData]) -> None:

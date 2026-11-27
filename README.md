@@ -107,7 +107,7 @@ For heating whose water temperature changes a lot, such as a wood-fired boiler. 
 | Supply temperature sensor | none | Optional. Measures the water going to the radiators. Without one, the output isn't adjusted. |
 | Reference supply temperature | 55 °C | The supply temperature your heating normally runs at, such as what a shunt or mixing valve aims for. At this temperature the output is as the PID works it out. |
 
-When the supply is less than 5 °C above the room, for example with the fire out, the output goes to 100 % and the integral holds, so the room doesn't overshoot once hot water arrives. An unavailable supply sensor is ignored. Pass-through thermostats aren't affected.
+When the supply is less than 5 °C above the room, for example with the fire out, the output goes to 100 % and the integral holds, so the room doesn't overshoot once hot water arrives. An unavailable supply sensor is ignored. When the supply moves by 5 °C or more, for example when the fire is stoked, Ember works out the output straight away instead of waiting for the next control interval. Pass-through thermostats aren't affected.
 
 ### Safety
 

@@ -131,5 +131,9 @@ INTEGRAL_BAND: Final = 0.5
 # Closer than this the water barely heats, such as with the fire out, so the
 # output goes to 100 % and the integral holds instead of dividing by nearly 0.
 SUPPLY_MIN_DELTA: Final = 5
+# Kelvin the supply must move since the last control step to act before the
+# next one. When the fire is stoked, a wide-open valve can lift the room within
+# ten minutes; smaller wobbles while it burns wait for the regular interval.
+SUPPLY_JUMP: Final = 5
 # Longest HA shutdown waits for the hand-back writes to go out.
 HAND_BACK_TIMEOUT: Final = 10
