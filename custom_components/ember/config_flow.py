@@ -54,6 +54,7 @@ from .const import (
     CONF_MIN_SWITCH_TIME,
     CONF_OPEN_DELAY,
     CONF_OPENING,
+    CONF_REFERENCE,
     CONF_SENSOR,
     CONF_SENSOR_TIMEOUT,
     CONF_THERMOSTATS,
@@ -71,6 +72,7 @@ from .const import (
     SECTION_PRESENCE,
     SECTION_PRESETS,
     SECTION_SAFETY,
+    SECTION_SUPPLY,
     SECTION_WINDOW,
     SUBENTRY_CENTRAL_HEATING,
     SUBENTRY_THERMOSTAT,
@@ -165,6 +167,17 @@ def _presence_schema(p: dict[str, Any]) -> probatio.Schema:
     return probatio.Schema({_optional_entity(CONF_ENTITY, p): PRESENCE_SELECTOR})
 
 
+def _supply_schema(s: dict[str, Any]) -> probatio.Schema:
+    return probatio.Schema(
+        {
+            _optional_entity(CONF_ENTITY, s): SENSOR_SELECTOR,
+            probatio.Required(CONF_REFERENCE, default=s[CONF_REFERENCE]): _number(
+                25, 90, "°C", 0.5
+            ),
+        }
+    )
+
+
 def _safety_schema(s: dict[str, Any]) -> probatio.Schema:
     return probatio.Schema(
         {
@@ -200,6 +213,7 @@ PAGES: dict[str, Callable[[dict[str, Any]], probatio.Schema]] = {
     SECTION_PRESENCE: _presence_schema,
     SECTION_PRESETS: _presets_schema,
     SECTION_CONTROL: _control_schema,
+    SECTION_SUPPLY: _supply_schema,
     SECTION_SAFETY: _safety_schema,
     SECTION_WINDOW: _window_schema,
     SECTION_MANUAL: _manual_schema,
@@ -255,8 +269,8 @@ class EmberConfigFlow(ConfigFlow, domain=DOMAIN):
     """Create the Ember entry that holds the central settings."""
 
     VERSION = 1
-    # 2 added the central heating subentry.
-    MINOR_VERSION = 2
+    # 2 added the central heating subentry, 3 the supply settings.
+    MINOR_VERSION = 3
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -391,6 +405,12 @@ class EmberOptionsFlow(OptionsFlow):
     ) -> ConfigFlowResult:
         """PID and cycle settings."""
         return await self._async_step_page(SECTION_CONTROL, user_input)
+
+    async def async_step_supply(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Supply temperature sensor and reference."""
+        return await self._async_step_page(SECTION_SUPPLY, user_input)
 
     async def async_step_safety(
         self, user_input: dict[str, Any] | None = None

@@ -20,8 +20,14 @@ class PID:
         self._last_measurement: float | None = None
         self._last_time: float | None = None
 
-    def update(self, setpoint: float, measurement: float, now: float) -> float:
-        """Return the output for a new measurement taken at `now` (seconds)."""
+    def update(
+        self, setpoint: float, measurement: float, now: float, gain: float = 1.0
+    ) -> float:
+        """Return the output for a measurement taken at `now` (seconds), times `gain`.
+
+        `gain` turns the heat the room needs into an output for the current
+        supply temperature, so saturation is judged on what is actually sent.
+        """
         error = setpoint - measurement
         derivative = 0.0
         dt = 0.0
@@ -34,7 +40,7 @@ class PID:
         self._last_measurement = measurement
 
         proportional = self.kp * error
-        unclamped = proportional + self.integral + self.kd * derivative
+        unclamped = gain * (proportional + self.integral + self.kd * derivative)
         # Conditional integration: don't wind up further while the output is
         # already saturated in the direction the error pushes it.
         saturated_high = unclamped >= OUTPUT_MAX and error > 0
@@ -48,7 +54,7 @@ class PID:
             self.integral = min(
                 max(self.integral + self.ki * error * dt, OUTPUT_MIN), OUTPUT_MAX
             )
-        output = proportional + self.integral + self.kd * derivative
+        output = gain * (proportional + self.integral + self.kd * derivative)
         return min(max(output, OUTPUT_MIN), OUTPUT_MAX)
 
     def pause(self) -> None:

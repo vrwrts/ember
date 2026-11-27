@@ -60,7 +60,7 @@ Several devices, such as the TRVs of one room, can share a thermostat. Each gets
 
 - **Valve** (valve thermostats): how far the TRV's valve is open, read from its opening degree. Opening, closing or setting a position writes it to the TRV straight away and puts the thermostat under manual control, so Ember leaves it there until manual control ends. Closing also turns the TRV off.
 - **Output** (switch thermostats): the share of each cycle the switches are on, in %. It is 0 while the thermostat is off or a window is open, and unknown under manual control.
-- **Integral** (switch and valve thermostats, disabled by default): the integral term of the PID controller, in %. Once the room has settled, it is roughly the output the room needs to hold its target, which helps when tuning. It keeps its value while the thermostat is off, a window is open or the thermostat is under manual control.
+- **Integral** (switch and valve thermostats, disabled by default): the integral term of the PID controller, in %. Once the room has settled, it is roughly the output the room needs to hold its target, at the reference supply temperature if a supply sensor is set. That helps when tuning. It keeps its value while the thermostat is off, a window is open or the thermostat is under manual control.
 
 Pass-through thermostats have none of these, as their devices regulate themselves.
 
@@ -97,6 +97,17 @@ While nobody is home (person not `home`, zone count 0, sensor off), thermostats 
 More than 0.5 °C from the target, the integral pauses while the room is already moving towards the target. That keeps a morning warm-up from building up an overshoot.
 
 The defaults start from Better Thermostat's. Every room is different, so expect to tune them.
+
+### Supply temperature
+
+For heating whose water temperature changes a lot, such as a wood-fired boiler. A radiator gives off heat roughly in proportion to how much hotter its water is than the room. With a supply sensor, Ember scales the output of switch and valve thermostats by that difference, so a valve opens further while the water is cooler and less while it's hotter. The room's PID then no longer has to catch up with every change in supply.
+
+| Option | Default | |
+|---|---|---|
+| Supply temperature sensor | none | Optional. Measures the water going to the radiators. Without one, the output isn't adjusted. |
+| Reference supply temperature | 55 °C | The supply temperature your heating normally runs at, such as what a shunt or mixing valve aims for. At this temperature the output is as the PID works it out. |
+
+When the supply is less than 5 °C above the room, for example with the fire out, the output goes to 100 % and the integral holds, so the room doesn't overshoot once hot water arrives. An unavailable supply sensor is ignored. When the supply moves by 5 °C or more, for example when the fire is stoked, Ember works out the output straight away instead of waiting for the next control interval. Pass-through thermostats aren't affected.
 
 ### Safety
 

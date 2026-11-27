@@ -26,7 +26,7 @@ async def test_new_entry_has_central_heating(hass: HomeAssistant) -> None:
     entry = result["result"]
     [subentry] = entry.get_subentries_of_type(SUBENTRY_CENTRAL_HEATING)
     assert subentry.title == "Central heating"
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
 
 
 async def test_demand_entities_belong_to_the_subentry(
@@ -202,7 +202,7 @@ async def test_migration_keeps_entity_ids(
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
     subentry_id = _central_heating_id(entry)
     assert devices_registry.async_get(old.id) is None
     for entity_id in ("binary_sensor.ember_heating_demand",

@@ -19,6 +19,7 @@
           "presence": "Presence",
           "presets": "Presets",
           "control": "Control",
+          "supply": "Supply temperature",
           "safety": "Safety",
           "window": "Windows",
           "manual_control": "Manual control",
@@ -87,6 +88,18 @@
           "interval": "How often the output is worked out again.",
           "cycle": "Switches are on for the output's share of each cycle.",
           "min_switch_time": "Shorter on or off periods are skipped."
+        }
+      },
+      "supply": {
+        "title": "Supply temperature",
+        "description": "For heating whose water temperature changes a lot, such as a wood-fired boiler. With a supply sensor, Ember opens valves further while the water is cooler and less while it's hotter.",
+        "data": {
+          "entity": "Supply temperature sensor",
+          "reference": "Reference supply temperature"
+        },
+        "data_description": {
+          "entity": "Optional. Measures the water going to the radiators. Without one, the output isn't adjusted.",
+          "reference": "The supply temperature your heating normally runs at, such as what a shunt or mixing valve aims for. At this temperature the output is as the PID works it out."
         }
       },
       "safety": {

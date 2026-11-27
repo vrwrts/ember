@@ -92,3 +92,11 @@ def test_integrates_when_stuck_away_from_the_target() -> None:
     pid.update(20, 19.3, 0)
     pid.update(20, 19.3, 300)
     assert pid.integral == pytest.approx(2.1)
+
+
+def test_gain_scales_the_output_and_saturation() -> None:
+    pid = PID(kp=60, ki=0.01, kd=0)
+    assert pid.update(20, 19, 0, gain=0.5) == 30
+    # 60 % doubled is past 100 %, so the integral doesn't grow.
+    assert pid.update(20, 19, 300, gain=2) == 100
+    assert pid.integral == 0

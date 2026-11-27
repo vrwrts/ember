@@ -240,7 +240,7 @@ async def add_thermostat(
         entry = MockConfigEntry(
             domain=DOMAIN,
             title="Ember",
-            minor_version=2,
+            minor_version=3,
             options=options or central(),
             subentries_data=[
                 CENTRAL_HEATING_SUBENTRY,
